@@ -767,7 +767,9 @@ const ScreenshotImport={
             if(!res.ok)throw new Error('Vision API failed');
             const data=await res.json();
             const text=data.content[0].text.trim();
-            const extracted=JSON.parse(text);
+            const jsonMatch=text.match(/\{[\s\S]*\}/);
+            if(!jsonMatch)throw new Error('No JSON in response');
+            const extracted=JSON.parse(jsonMatch[0]);
             if(extracted.contract&&CONTRACTS[extracted.contract])document.getElementById('screenshot-contract').value=extracted.contract;
             if(extracted.direction)document.getElementById('screenshot-direction').value=extracted.direction;
             if(extracted.entryPrice)document.getElementById('screenshot-entry').value=extracted.entryPrice;
