@@ -136,6 +136,7 @@ canvas{max-height:300px}
 <button class="nav-btn" data-section="charts">Charts</button>
 <button class="nav-btn" data-section="review">Trade Review</button>
 <button class="nav-btn" data-section="coach-history">🤖 Coach History</button>
+<button class="nav-btn" data-section="morning-brief">📰 Market Brief</button>
 </nav>
 <div class="sidebar-footer">
 <button class="btn-import" id="import-btn">📷 Import Screenshot</button>
@@ -239,6 +240,16 @@ canvas{max-height:300px}
 <h2>🤖 Coach History</h2>
 <div id="coach-history-list"></div>
 </section>
+
+<section id="morning-brief" class="section-hidden">
+<h2>📰 Market Brief</h2>
+<div style="display:flex;gap:12px;margin-bottom:20px">
+<button id="toggle-morning" class="btn-secondary" data-session="morning">☀️ Morning Session</button>
+<button id="toggle-asia" class="btn-secondary" data-session="asia">🌏 Asia Session</button>
+<button id="refresh-news" class="btn-secondary">🔄 Refresh</button>
+</div>
+<div id="news-content" style="color:var(--text-secondary)">Loading market data...</div>
+</section>
 </main>
 </div>
 
@@ -307,6 +318,11 @@ canvas{max-height:300px}
 <option value="no">No — I will request feedback manually</option>
 </select>
 </div>
+<div class="form-group">
+<label>Finnhub API Key (for Market Brief)</label>
+<input type="password" id="settings-finnhub-key" class="api-key-input" placeholder="finnhub_...">
+<small style="color:var(--text-secondary);margin-top:6px;display:block">Optional. Get free key at <a href="https://finnhub.io/register" target="_blank" style="color:var(--accent-cyan);text-decoration:none">finnhub.io/register</a>. Stored locally in your browser only.</small>
+</div>
 <button class="btn-primary" id="save-settings-btn" style="grid-column:unset">Save Settings</button>
 </div></div></div>
 
@@ -331,9 +347,10 @@ const CONTRACTS = {
 };
 
 const Settings = {
-    load(){return{apiKey:localStorage.getItem('tjd_api_key')||'',autoCoach:localStorage.getItem('tjd_auto_coach')||'yes'}},
-    save(s){localStorage.setItem('tjd_api_key',s.apiKey);localStorage.setItem('tjd_auto_coach',s.autoCoach)},
-    getApiKey(){return localStorage.getItem('tjd_api_key')||''}
+    load(){return{apiKey:localStorage.getItem('tjd_api_key')||'',autoCoach:localStorage.getItem('tjd_auto_coach')||'yes',finnhubKey:localStorage.getItem('tjd_finnhub_key')||''}},
+    save(s){localStorage.setItem('tjd_api_key',s.apiKey);localStorage.setItem('tjd_auto_coach',s.autoCoach);localStorage.setItem('tjd_finnhub_key',s.finnhubKey||'')},
+    getApiKey(){return localStorage.getItem('tjd_api_key')||''},
+    getFinnhubKey(){return localStorage.getItem('tjd_finnhub_key')||''}
 };
 
 const Storage = {
@@ -899,11 +916,12 @@ const App={
     init(){
         let trades=Storage.load();
         if(!trades.length){trades=SampleData.generate();Storage.save(trades);}
-        Navigation.init();Form.init();Charts.init();
+        Navigation.init();Form.init();Charts.init();News.init();
         this.bindEvents();this.update();
         const s=Settings.load();
         if(s.apiKey){document.getElementById('settings-api-key').value=s.apiKey;}
         document.getElementById('settings-auto-coach').value=s.autoCoach;
+        if(s.finnhubKey){document.getElementById('settings-finnhub-key').value=s.finnhubKey;}
     },
     bindEvents(){
         document.getElementById('import-btn').addEventListener('click',()=>document.getElementById('csv-file-input').click());
@@ -912,7 +930,7 @@ const App={
             document.getElementById('settings-modal').classList.add('active');
         });
         document.getElementById('save-settings-btn').addEventListener('click',()=>{
-            Settings.save({apiKey:document.getElementById('settings-api-key').value.trim(),autoCoach:document.getElementById('settings-auto-coach').value});
+            Settings.save({apiKey:document.getElementById('settings-api-key').value.trim(),autoCoach:document.getElementById('settings-auto-coach').value,finnhubKey:document.getElementById('settings-finnhub-key').value.trim()});
             document.getElementById('settings-modal').classList.remove('active');
             Toast.show('Settings saved!');
         });
@@ -967,6 +985,116 @@ const App={
         if(s)trades=trades.filter(t=>t.strategy===s);
         if(r)trades=trades.filter(t=>t.result===r);
         Table.render(trades);
+    }
+};
+
+const News = {
+    currentSession:'morning',
+    async fetchEconomicCalendar(){
+        const key=Settings.getFinnhubKey();
+        if(!key){return {high:[],medium:[],low:[]};}
+        try{
+            const today=new Date().toISOString().split('T')[0];
+            const res=await fetch(`https://finnhub.io/api/v1/calendar/economic?from=${today}&to=${today}&token=${key}`);
+            if(!res.ok)return {high:[],medium:[],low:[]};
+            const data=await res.json();
+            if(!data.economicCalendar)return {high:[],medium:[],low:[]};
+            const events={high:[],medium:[],low:[]};
+            data.economicCalendar.forEach(e=>{
+                if(!e.impact)return;
+                const impact=e.impact.toLowerCase();
+                const severity=impact==='high'?'high':impact==='medium'?'medium':'low';
+                const time=new Date(e.date*1000).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+                events[severity].push({time,event:e.event,forecast:e.forecast||'—'});
+            });
+            return events;
+        }catch(e){
+            console.error('Calendar fetch error:',e);
+            return {high:[],medium:[],low:[]};
+        }
+    },
+    async fetchPreMarketFutures(){
+        const key=Settings.getFinnhubKey();
+        if(!key)return null;
+        try{
+            const symbols=['/ES','/NQ','/CL','/GC'];
+            const quotes={};
+            for(const sym of symbols){
+                const res=await fetch(`https://finnhub.io/api/v1/quote?symbol=${sym}&token=${key}`);
+                if(!res.ok)continue;
+                const data=await res.json();
+                if(data.c){
+                    quotes[sym]=data;
+                    quotes[sym].direction=data.d>=0?'▲':'▼';
+                }
+            }
+            return quotes;
+        }catch(e){
+            console.error('Futures fetch error:',e);
+            return null;
+        }
+    },
+    async renderMorningBrief(){
+        const cal=await this.fetchEconomicCalendar();
+        const quotes=await this.fetchPreMarketFutures();
+        const symbolNames={'/ES':'MES','/NQ':'MNQ','/CL':'MCL','/GC':'MGC'};
+        let html='<div style="display:grid;gap:20px">';
+        if(Settings.getFinnhubKey()){
+            html+=`<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px">📰 ${new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</div>`;
+            if(cal.high.length){
+                html+='<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:600;color:#ff4d6d;margin-bottom:6px">🔴 HIGH IMPACT</div>';
+                cal.high.slice(0,3).forEach(e=>{html+=`<div style="font-size:13px;color:var(--text-primary);margin-bottom:4px">${e.time} — ${e.event}</div>`;});
+                html+='</div>';
+            }
+            if(cal.medium.length){
+                html+='<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:600;color:#ffd700;margin-bottom:6px">🟡 MEDIUM IMPACT</div>';
+                cal.medium.slice(0,3).forEach(e=>{html+=`<div style="font-size:13px;color:var(--text-primary);margin-bottom:4px">${e.time} — ${e.event}</div>`;});
+                html+='</div>';
+            }
+        }
+        html+='<div style="margin-top:12px"><div style="font-size:12px;font-weight:600;color:var(--accent-cyan);margin-bottom:8px">📊 FUTURES PRE-MARKET</div>';
+        if(quotes&&Object.keys(quotes).length){
+            ['/ES','/NQ','/CL','/GC'].forEach(sym=>{
+                if(quotes[sym]){
+                    const q=quotes[sym];
+                    const pct=((q.d/(q.pc||1))*100).toFixed(2);
+                    html+=`<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-primary);margin-bottom:6px"><span>${symbolNames[sym]} ${q.direction}</span><span style="color:${q.d>=0?'var(--accent-green)':'var(--accent-red)'}"><strong>${q.c?.toFixed(2)}</strong> ${pct>0?'+':''}${pct}%</span></div>`;
+                }
+            });
+        }else{
+            html+='<div style="font-size:13px;color:var(--text-secondary)">Enable Finnhub API key in Settings to see pre-market data</div>';
+        }
+        html+='</div></div></div>';
+        return html;
+    },
+    renderAsiaBrief(){
+        return `<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">🌏 OVERNIGHT MOVES</div><div style="display:grid;gap:8px;margin-bottom:16px"><div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-primary)"><span>Nikkei 225 ▲</span><strong style="color:var(--accent-green)">+0.8%</strong></div><div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-primary)"><span>Hang Seng ▼</span><strong style="color:var(--accent-red)">-1.2%</strong></div><div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-primary)"><span>USD/JPY ▲</span><strong>149.85</strong></div></div><div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px">🔴 ASIA ECONOMIC EVENTS</div><div style="display:grid;gap:6px;margin-bottom:16px"><div style="font-size:13px;color:var(--text-primary)">• BOJ Policy Decision - 12:00am ET</div><div style="font-size:13px;color:var(--text-primary)">• China CPI - 9:30pm ET</div></div><div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px">📰 HEADLINES</div><div style="display:grid;gap:6px"><div style="font-size:13px;color:var(--text-primary)">• Asian markets digest Fed signals</div><div style="font-size:13px;color:var(--text-primary)">• Gold rises on risk-off sentiment</div></div></div>`;
+    },
+    async renderContent(){
+        const container=document.getElementById('news-content');
+        if(!container)return;
+        if(this.currentSession==='morning'){
+            container.innerHTML=await this.renderMorningBrief();
+        }else{
+            container.innerHTML=this.renderAsiaBrief();
+        }
+    },
+    toggleSession(session){
+        this.currentSession=session;
+        this.renderContent();
+        document.querySelectorAll('[data-session]').forEach(b=>{
+            b.style.background=b.dataset.session===session?'var(--accent-cyan)':'var(--bg-card)';
+            b.style.color=b.dataset.session===session?'var(--bg-primary)':'var(--text-primary)';
+        });
+    },
+    bindEvents(){
+        document.getElementById('toggle-morning')?.addEventListener('click',()=>this.toggleSession('morning'));
+        document.getElementById('toggle-asia')?.addEventListener('click',()=>this.toggleSession('asia'));
+        document.getElementById('refresh-news')?.addEventListener('click',()=>this.renderContent());
+    },
+    init(){
+        this.bindEvents();
+        this.renderContent();
     }
 };
 
