@@ -125,7 +125,33 @@ canvas{max-height:300px}
 .coach-history-date{font-size:12px;color:var(--text-secondary);margin-bottom:4px}
 .coach-history-trade{font-weight:600;margin-bottom:6px}
 .coach-history-score{color:var(--accent-cyan);font-size:20px;font-weight:700}
-@media(max-width:1024px){.chart-grid{grid-template-columns:1fr}.screenshot-layout{grid-template-columns:1fr}}
+/* Calendar */
+.cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.cal-nav-btn{background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:14px;transition:all .2s}
+.cal-nav-btn:hover{border-color:var(--accent-cyan);color:var(--accent-cyan)}
+.cal-month-title{font-size:18px;font-weight:700;color:var(--accent-cyan)}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr) 140px;gap:4px}
+.cal-day-header{text-align:center;font-size:11px;font-weight:600;color:var(--text-secondary);padding:6px 0;text-transform:uppercase}
+.cal-week-header{font-size:11px;font-weight:600;color:var(--text-secondary);padding:6px 8px;text-align:center;text-transform:uppercase}
+.cal-cell{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:8px;min-height:72px;cursor:pointer;transition:all .2s;position:relative}
+.cal-cell:hover{border-color:var(--accent-cyan);background:var(--bg-card-hover)}
+.cal-cell.empty{background:transparent;border-color:transparent;cursor:default}
+.cal-cell.has-trades{border-color:rgba(0,212,255,.2)}
+.cal-day-num{font-size:11px;color:var(--text-muted);margin-bottom:4px}
+.cal-pnl{font-size:13px;font-weight:700;line-height:1.2}
+.cal-pnl.pos{color:var(--accent-green)}.cal-pnl.neg{color:var(--accent-red)}
+.cal-meta{font-size:10px;color:var(--text-secondary);margin-top:3px}
+.cal-week-cell{background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:8px;display:flex;flex-direction:column;justify-content:center;min-height:72px;cursor:pointer;transition:all .2s}
+.cal-week-cell:hover{border-color:var(--accent-cyan)}
+.cal-week-label{font-size:10px;color:var(--text-secondary);margin-bottom:4px}
+.cal-week-pnl{font-size:14px;font-weight:700}
+.cal-week-pnl.pos{color:var(--accent-green)}.cal-week-pnl.neg{color:var(--accent-red)}
+.cal-week-meta{font-size:10px;color:var(--text-secondary);margin-top:2px}
+.cal-month-summary{background:var(--bg-card);border:1px solid var(--accent-cyan);border-radius:8px;padding:12px 20px;margin-bottom:16px;display:flex;gap:32px;align-items:center;flex-wrap:wrap}
+.cal-summary-item{text-align:center}
+.cal-summary-val{font-size:20px;font-weight:700}
+.cal-summary-lbl{font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px}
+@media(max-width:1024px){.chart-grid{grid-template-columns:1fr}.screenshot-layout{grid-template-columns:1fr}.cal-grid{grid-template-columns:repeat(7,1fr)}}
 @media(max-width:768px){#sidebar{width:100%;height:auto;position:static;border-right:none;border-bottom:1px solid var(--border)}#main-content{margin-left:0;padding:12px}.stat-cards{grid-template-columns:1fr 1fr}}
 </style>
 </head>
@@ -147,6 +173,7 @@ canvas{max-height:300px}
 <button class="nav-btn" data-section="coach-history">🤖 Coach History</button>
 <button class="nav-btn" data-section="morning-brief">📰 Market Brief</button>
 <button class="nav-btn" data-section="balance-history">💰 Balance History</button>
+<button class="nav-btn" data-section="calendar">📅 Calendar</button>
 </nav>
 <div class="sidebar-footer">
 <button class="btn-import" id="import-btn">📷 Import Screenshot</button>
@@ -271,6 +298,16 @@ canvas{max-height:300px}
 </div>
 <div id="balance-trades-list" style="margin-top:20px"></div>
 </section>
+
+<section id="calendar" class="section-hidden">
+<div class="cal-header">
+<button class="cal-nav-btn" id="cal-prev">&#8592; Prev</button>
+<span class="cal-month-title" id="cal-month-label"></span>
+<button class="cal-nav-btn" id="cal-next">Next &#8594;</button>
+</div>
+<div id="cal-month-summary" class="cal-month-summary"></div>
+<div id="cal-grid" class="cal-grid"></div>
+</section>
 </main>
 </div>
 
@@ -354,6 +391,11 @@ canvas{max-height:300px}
 <div id="coach-detail-content"></div>
 </div></div>
 
+<div id="day-breakdown-modal" class="modal-overlay">
+<div class="modal modal-wide"><div class="modal-header"><h3 id="day-modal-title">Day Breakdown</h3><button class="modal-close">&times;</button></div>
+<div id="day-modal-stats" class="stat-cards" style="margin-bottom:16px"></div>
+<div id="day-modal-table"></div>
+</div></div>
 <div id="toast"></div>
 <input type="file" id="csv-file-input" accept="image/*" style="display:none">
 <script>
@@ -959,7 +1001,7 @@ const App={
             trades=SampleData.generate();Storage.save(trades);
         }
         localStorage.setItem(seedKey,'1');
-        Navigation.init();Form.init();Charts.init();News.init();Balance.init(trades);
+        Navigation.init();Form.init();Charts.init();News.init();Balance.init(trades);Calendar.init(trades);
         this.bindEvents();this.update();
         const s=Settings.load();
         if(s.apiKey){document.getElementById('settings-api-key').value=s.apiKey;}
@@ -979,7 +1021,7 @@ const App={
         if(!trades.length&&!localStorage.getItem(seedKey)&&journal==='live'){
             trades=SampleData.generate();Storage.save(trades);localStorage.setItem(seedKey,'1');
         }
-        Balance.init(trades);
+        Balance.init(trades);Calendar.render(trades);
         this.update();
         Toast.show('Switched to '+(journal==='live'?'Live':'Paper')+' journal');
     },
@@ -1008,7 +1050,7 @@ const App={
         Dashboard.update(trades);
         Table.render(trades);
         Charts.updateAll(trades);
-        Coach.renderHistory();Balance.render(trades);
+        Coach.renderHistory();Balance.render(trades);Calendar.render(trades);
         this.updateStats(trades);
         this.updateFilters(trades);
     },
@@ -1102,6 +1144,130 @@ const Balance = {
         list.innerHTML=`<h3 style="margin-bottom:12px;font-size:16px">Balance Log</h3><table class="trade-table"><thead><tr><th>Date</th><th>Contract</th><th>P&L</th><th>Balance After</th></tr></thead><tbody>${bt.map(t=>`<tr><td>${t.date}</td><td>${t.contract}</td><td style="color:${t.pnlDollar>=0?'var(--accent-green)':'var(--accent-red)'}">${t.pnlDollar>=0?'+':''}$${t.pnlDollar.toFixed(2)}</td><td style="color:var(--accent-cyan);font-weight:600">$${t.balanceAfter.toLocaleString()}</td></tr>`).join('')}</tbody></table>`;
     },
     init(trades){this.initChart();this.render(trades);}
+};
+
+const Calendar = {
+    currentYear:new Date().getFullYear(),
+    currentMonth:new Date().getMonth(),
+    getDayStats(trades,dateStr){
+        const day=trades.filter(t=>t.date===dateStr);
+        if(!day.length)return null;
+        const wins=day.filter(t=>t.result==='win');
+        return{trades:day,count:day.length,pnl:day.reduce((s,t)=>s+t.pnlDollar,0),winRate:day.length?(wins.length/day.length*100).toFixed(0):0};
+    },
+    getWeekTrades(trades,weekDates){
+        return trades.filter(t=>weekDates.includes(t.date));
+    },
+    render(trades){
+        const y=this.currentYear,m=this.currentMonth;
+        const label=new Date(y,m,1).toLocaleDateString('en-US',{month:'long',year:'numeric'});
+        document.getElementById('cal-month-label').textContent=label;
+        const firstDay=new Date(y,m,1).getDay();
+        const daysInMonth=new Date(y,m+1,0).getDate();
+        const monthTrades=trades.filter(t=>t.date.startsWith(`${y}-${String(m+1).padStart(2,'0')}`));
+        const monthPnl=monthTrades.reduce((s,t)=>s+t.pnlDollar,0);
+        const monthWins=monthTrades.filter(t=>t.result==='win');
+        const summary=document.getElementById('cal-month-summary');
+        summary.innerHTML=`
+            <div class="cal-summary-item"><div class="cal-summary-val" style="color:${monthPnl>=0?'var(--accent-green)':'var(--accent-red)'}">${monthPnl>=0?'+':''}$${Math.abs(monthPnl).toFixed(2)}</div><div class="cal-summary-lbl">Monthly P&L</div></div>
+            <div class="cal-summary-item"><div class="cal-summary-val" style="color:var(--accent-cyan)">${monthTrades.length}</div><div class="cal-summary-lbl">Total Trades</div></div>
+            <div class="cal-summary-item"><div class="cal-summary-val" style="color:var(--accent-green)">${monthTrades.length?(monthWins.length/monthTrades.length*100).toFixed(1):0}%</div><div class="cal-summary-lbl">Win Rate</div></div>
+            <div class="cal-summary-item"><div class="cal-summary-val" style="color:var(--accent-yellow)">${monthWins.length}</div><div class="cal-summary-lbl">Winning Days</div></div>`;
+        const grid=document.getElementById('cal-grid');
+        const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+        let html=dayNames.map(d=>`<div class="cal-day-header">${d}</div>`).join('');
+        html+=`<div class="cal-week-header">Week</div>`;
+        let weekDates=[],weekNum=0;
+        for(let i=0;i<firstDay;i++){html+=`<div class="cal-cell empty"></div>`;weekDates.push(null);}
+        for(let d=1;d<=daysInMonth;d++){
+            const dateStr=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            const dayStats=this.getDayStats(trades,dateStr);
+            const dow=new Date(y,m,d).getDay();
+            weekDates.push(dateStr);
+            if(dayStats){
+                const pnlClass=dayStats.pnl>=0?'pos':'neg';
+                const sign=dayStats.pnl>=0?'+':'';
+                html+=`<div class="cal-cell has-trades" onclick="Calendar.showDayBreakdown('${dateStr}',Storage.load())">
+                    <div class="cal-day-num">${d}</div>
+                    <div class="cal-pnl ${pnlClass}">${sign}$${Math.abs(dayStats.pnl).toFixed(2)}</div>
+                    <div class="cal-meta">${dayStats.count} trade${dayStats.count!==1?'s':''} · ${dayStats.winRate}%W</div>
+                </div>`;
+            }else{
+                html+=`<div class="cal-cell"><div class="cal-day-num">${d}</div></div>`;
+            }
+            if(dow===6||d===daysInMonth){
+                const wt=this.getWeekTrades(trades,weekDates.filter(Boolean));
+                const wpnl=wt.reduce((s,t)=>s+t.pnlDollar,0);
+                const ww=wt.filter(t=>t.result==='win');
+                const wDates=weekDates.filter(Boolean);
+                if(wt.length){
+                    html+=`<div class="cal-week-cell" onclick="Calendar.showWeekBreakdown(${JSON.stringify(wDates)},Storage.load())">
+                        <div class="cal-week-label">Wk ${++weekNum}</div>
+                        <div class="cal-week-pnl ${wpnl>=0?'pos':'neg'}">${wpnl>=0?'+':''}$${Math.abs(wpnl).toFixed(2)}</div>
+                        <div class="cal-week-meta">${wt.length}T · ${wt.length?(ww.length/wt.length*100).toFixed(0):0}%W</div>
+                    </div>`;
+                }else{
+                    html+=`<div class="cal-week-cell"><div class="cal-week-label">Wk ${++weekNum}</div><div style="color:var(--text-muted);font-size:12px">—</div></div>`;
+                }
+                if(d<daysInMonth){
+                    const remaining=6-dow;
+                    for(let r=0;r<remaining;r++)html+=`<div class="cal-cell empty"></div>`;
+                }
+                weekDates=[];
+            }
+        }
+        grid.innerHTML=html;
+    },
+    showDayBreakdown(dateStr,trades){
+        const dayTrades=trades.filter(t=>t.date===dateStr).sort((a,b)=>a.id.localeCompare(b.id));
+        const wins=dayTrades.filter(t=>t.result==='win');
+        const pnl=dayTrades.reduce((s,t)=>s+t.pnlDollar,0);
+        const d=new Date(dateStr+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+        document.getElementById('day-modal-title').textContent=d;
+        const statsEl=document.getElementById('day-modal-stats');
+        if(!dayTrades.length){statsEl.innerHTML='<p style="color:var(--text-secondary)">No trades on this day.</p>';document.getElementById('day-modal-table').innerHTML='';document.getElementById('day-breakdown-modal').classList.add('active');return;}
+        const avgWin=wins.length?(wins.reduce((s,t)=>s+t.pnlDollar,0)/wins.length).toFixed(2):0;
+        const losses=dayTrades.filter(t=>t.result==='loss');
+        const avgLoss=losses.length?(losses.reduce((s,t)=>s+t.pnlDollar,0)/losses.length).toFixed(2):0;
+        statsEl.innerHTML=[
+            {l:'Total P&L',v:(pnl>=0?'+':'')+'$'+pnl.toFixed(2),c:pnl>=0?'var(--accent-green)':'var(--accent-red)'},
+            {l:'Trades',v:dayTrades.length,c:'var(--accent-cyan)'},
+            {l:'Win Rate',v:dayTrades.length?(wins.length/dayTrades.length*100).toFixed(1)+'%':'—',c:'var(--accent-green)'},
+            {l:'Best Trade',v:'$'+Math.max(...dayTrades.map(t=>t.pnlDollar)).toFixed(2),c:'var(--accent-green)'},
+            {l:'Worst Trade',v:'$'+Math.min(...dayTrades.map(t=>t.pnlDollar)).toFixed(2),c:'var(--accent-red)'},
+            {l:'Avg Win',v:'$'+avgWin,c:'var(--accent-green)'},{l:'Avg Loss',v:'$'+avgLoss,c:'var(--accent-red)'}
+        ].map(s=>`<div class="stat-card"><div class="stat-value" style="color:${s.c}">${s.v}</div><div class="stat-label">${s.l}</div></div>`).join('');
+        document.getElementById('day-modal-table').innerHTML=`<table class="trade-table"><thead><tr><th>Contract</th><th>Dir</th><th>Entry</th><th>Exit</th><th>P&L</th><th>R:R</th><th>Strategy</th><th>Result</th></tr></thead><tbody>${dayTrades.map(t=>`<tr><td>${t.contract}</td><td><span class="badge ${t.direction}">${t.direction}</span></td><td>${t.entryPrice}</td><td>${t.exitPrice}</td><td style="color:${t.pnlDollar>=0?'var(--accent-green)':'var(--accent-red)'};font-weight:600">${t.pnlDollar>=0?'+':''}$${t.pnlDollar.toFixed(2)}</td><td>${t.rrRatio||'—'}</td><td>${t.strategy||'—'}</td><td><span class="badge ${t.result}">${t.result}</span></td></tr>`).join('')}</tbody></table>`;
+        document.getElementById('day-breakdown-modal').classList.add('active');
+    },
+    showWeekBreakdown(weekDates,trades){
+        const wt=trades.filter(t=>weekDates.includes(t.date));
+        const wpnl=wt.reduce((s,t)=>s+t.pnlDollar,0);
+        const ww=wt.filter(t=>t.result==='win');
+        const startD=new Date(weekDates[0]+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
+        const endD=new Date(weekDates[weekDates.length-1]+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
+        document.getElementById('day-modal-title').textContent=`Week of ${startD} – ${endD}`;
+        const statsEl=document.getElementById('day-modal-stats');
+        statsEl.innerHTML=[
+            {l:'Week P&L',v:(wpnl>=0?'+':'')+'$'+wpnl.toFixed(2),c:wpnl>=0?'var(--accent-green)':'var(--accent-red)'},
+            {l:'Total Trades',v:wt.length,c:'var(--accent-cyan)'},
+            {l:'Win Rate',v:wt.length?(ww.length/wt.length*100).toFixed(1)+'%':'—',c:'var(--accent-green)'}
+        ].map(s=>`<div class="stat-card"><div class="stat-value" style="color:${s.c}">${s.v}</div><div class="stat-label">${s.l}</div></div>`).join('');
+        const dayCards=weekDates.map(date=>{
+            const dt=trades.filter(t=>t.date===date);
+            const dp=dt.reduce((s,t)=>s+t.pnlDollar,0);
+            const dw=dt.filter(t=>t.result==='win');
+            const label=new Date(date+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+            return`<div class="stat-card" style="cursor:pointer" onclick="Calendar.showDayBreakdown('${date}',Storage.load())"><div class="stat-value" style="color:${dp>=0?'var(--accent-green)':'var(--accent-red)'};font-size:16px">${dp>=0?'+':''}$${dp.toFixed(2)}</div><div class="stat-label">${label}</div><div style="font-size:11px;color:var(--text-secondary);margin-top:4px">${dt.length} trades · ${dt.length?(dw.length/dt.length*100).toFixed(0):0}% W</div></div>`;
+        }).join('');
+        document.getElementById('day-modal-table').innerHTML=`<div class="stat-cards" style="margin-top:8px">${dayCards}</div>`;
+        document.getElementById('day-breakdown-modal').classList.add('active');
+    },
+    bindEvents(){
+        document.getElementById('cal-prev').addEventListener('click',()=>{this.currentMonth--;if(this.currentMonth<0){this.currentMonth=11;this.currentYear--;}this.render(Storage.load());});
+        document.getElementById('cal-next').addEventListener('click',()=>{this.currentMonth++;if(this.currentMonth>11){this.currentMonth=0;this.currentYear++;}this.render(Storage.load());});
+    },
+    init(trades){this.bindEvents();this.render(trades);}
 };
 
 const News = {
