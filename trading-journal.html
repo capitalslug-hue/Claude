@@ -17,9 +17,11 @@ body{background:var(--bg-primary);color:var(--text-primary);font-family:-apple-s
 #sidebar{position:fixed;left:0;top:0;width:260px;height:100vh;background:var(--bg-secondary);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;z-index:100}
 .sidebar-logo{padding:20px;border-bottom:1px solid var(--border);font-size:18px;font-weight:700;background:linear-gradient(135deg,var(--accent-cyan),var(--accent-green));background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent}
 .sidebar-nav{flex:1;padding:12px 0}
-.nav-btn{width:100%;padding:12px 20px;border:none;background:none;color:var(--text-secondary);text-align:left;cursor:pointer;transition:all .2s;font-size:14px;display:block}
+.nav-btn{width:100%;padding:12px 20px;border:none;background:none;color:var(--text-secondary);text-align:left;cursor:grab;transition:all .2s;font-size:14px;display:block;user-select:none}
 .nav-btn:hover{background:var(--bg-card);color:var(--text-primary)}
 .nav-btn.active{background:var(--bg-card);color:var(--accent-cyan);border-left:3px solid var(--accent-cyan);padding-left:17px}
+.nav-btn.dragging{opacity:.4;cursor:grabbing}
+.nav-btn.drag-over{border-top:2px solid var(--accent-cyan)}
 .sidebar-footer{padding:12px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
 .btn-import{width:100%;padding:10px;background:var(--accent-cyan);color:var(--bg-primary);border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;transition:all .2s}
 .btn-import:hover{background:#00a8cc}
@@ -35,10 +37,12 @@ body{background:var(--bg-primary);color:var(--text-primary);font-family:-apple-s
 section{margin-bottom:32px}
 h2{font-size:20px;margin-bottom:16px;color:var(--text-primary)}
 .stat-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px}
-.stat-card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:16px;transition:all .2s}
-.stat-card:hover{background:var(--bg-card-hover);border-color:var(--accent-cyan)}
-.stat-value{font-size:24px;font-weight:700;margin-bottom:4px}
-.stat-label{font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px}
+.stat-card{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:16px 16px 14px;transition:all .2s;position:relative;overflow:hidden}
+.stat-card:hover{background:var(--bg-card-hover);transform:translateY(-2px);box-shadow:0 4px 20px rgba(0,0,0,.3)}
+.stat-card-icon{font-size:22px;margin-bottom:8px;display:block;line-height:1}
+.stat-card-accent{position:absolute;top:0;left:0;width:3px;height:100%;border-radius:10px 0 0 10px}
+.stat-value{font-size:22px;font-weight:700;margin-bottom:4px;line-height:1.2}
+.stat-label{font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.6px}
 .stat-delta{font-size:12px;margin-top:8px}
 .stat-delta.positive{color:var(--accent-green)}.stat-delta.negative{color:var(--accent-red)}
 .form-grid{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px}
@@ -528,12 +532,47 @@ const Toast={
 };
 
 const Navigation={
-    init(){document.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click',()=>this.showSection(b.dataset.section)));},
+    init(){
+        this.restoreOrder();
+        document.querySelectorAll('.nav-btn').forEach(b=>{
+            b.addEventListener('click',()=>this.showSection(b.dataset.section));
+            b.setAttribute('draggable','true');
+            b.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',b.dataset.section);b.classList.add('dragging');});
+            b.addEventListener('dragend',()=>{document.querySelectorAll('.nav-btn').forEach(n=>{n.classList.remove('dragging','drag-over');});});
+            b.addEventListener('dragover',e=>{e.preventDefault();b.classList.add('drag-over');});
+            b.addEventListener('dragleave',()=>b.classList.remove('drag-over'));
+            b.addEventListener('drop',e=>{
+                e.preventDefault();b.classList.remove('drag-over');
+                const fromSection=e.dataTransfer.getData('text/plain');
+                const fromBtn=document.querySelector(`[data-section="${fromSection}"]`);
+                if(fromBtn&&fromBtn!==b){b.parentNode.insertBefore(fromBtn,b);}
+                this.saveOrder();
+            });
+        });
+    },
     showSection(id){
         document.querySelectorAll('section').forEach(s=>s.classList.add('section-hidden'));
-        document.getElementById(id).classList.remove('section-hidden');
+        const target=document.getElementById(id);
+        if(target)target.classList.remove('section-hidden');
         document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
-        document.querySelector(`[data-section="${id}"]`).classList.add('active');
+        const btn=document.querySelector(`[data-section="${id}"]`);
+        if(btn)btn.classList.add('active');
+    },
+    saveOrder(){
+        const order=[...document.querySelectorAll('.nav-btn')].map(b=>b.dataset.section);
+        localStorage.setItem('tjd_nav_order',JSON.stringify(order));
+    },
+    restoreOrder(){
+        const saved=localStorage.getItem('tjd_nav_order');
+        if(!saved)return;
+        try{
+            const order=JSON.parse(saved);
+            const nav=document.querySelector('.sidebar-nav');
+            order.forEach(section=>{
+                const btn=document.querySelector(`[data-section="${section}"]`);
+                if(btn)nav.appendChild(btn);
+            });
+        }catch(e){}
     }
 };
 
@@ -879,22 +918,22 @@ const Dashboard={
             eq+=t.pnlDollar;if(eq>maxEq)maxEq=eq;const dd=maxEq-eq;if(dd>maxDD)maxDD=dd;
         });
         const stats=[
-            {label:'Total Trades',value:trades.length},
-            {label:'Win Rate',value:`${((wins.length/trades.length)*100).toFixed(1)}%`},
-            {label:'Net P&L',value:`$${totalPnL.toFixed(2)}`,positive:totalPnL>=0},
-            {label:'Avg Win',value:`$${avgWin}`},
-            {label:'Avg Loss',value:`$${avgLoss}`},
-            {label:'Profit Factor',value:pf},
-            {label:'Avg R-Multiple',value:`${avgR}x`},
-            {label:'Best Trade',value:`$${best.pnlDollar.toFixed(2)}`},
-            {label:'Worst Trade',value:`$${worst.pnlDollar.toFixed(2)}`},
-            {label:'Max Drawdown',value:`$${maxDD.toFixed(2)}`}
+            {label:'Total Trades',value:trades.length,icon:'📊',color:'#00d4ff'},
+            {label:'Win Rate',value:`${((wins.length/trades.length)*100).toFixed(1)}%`,icon:'🎯',color:'#00ff88'},
+            {label:'Net P&L',value:`$${totalPnL.toFixed(2)}`,icon:'💰',color:totalPnL>=0?'#00ff88':'#ff4d6d',valColor:totalPnL>=0?'#00ff88':'#ff4d6d'},
+            {label:'Avg Win',value:`$${avgWin}`,icon:'✅',color:'#00ff88',valColor:'#00ff88'},
+            {label:'Avg Loss',value:`$${avgLoss}`,icon:'❌',color:'#ff4d6d',valColor:'#ff4d6d'},
+            {label:'Profit Factor',value:pf,icon:'⚖️',color:'#ffd700'},
+            {label:'Avg R-Multiple',value:`${avgR}x`,icon:'📐',color:'#a78bfa'},
+            {label:'Best Trade',value:`$${best.pnlDollar.toFixed(2)}`,icon:'🚀',color:'#00ff88',valColor:'#00ff88'},
+            {label:'Worst Trade',value:`$${worst.pnlDollar.toFixed(2)}`,icon:'💥',color:'#ff4d6d',valColor:'#ff4d6d'},
+            {label:'Max Drawdown',value:`$${maxDD.toFixed(2)}`,icon:'📉',color:'#ff4d6d',valColor:'#ff4d6d'}
         ];
         document.getElementById('stat-cards').innerHTML=stats.map(s=>`
         <div class="stat-card">
-          <div class="stat-value" style="${s.positive!==undefined?`color:${s.positive?'var(--accent-green)':'var(--accent-red)'}`:''}">
-            ${s.value}
-          </div>
+          <div class="stat-card-accent" style="background:${s.color}"></div>
+          <span class="stat-card-icon">${s.icon}</span>
+          <div class="stat-value" style="color:${s.valColor||'var(--text-primary)'}">${s.value}</div>
           <div class="stat-label">${s.label}</div>
         </div>`).join('');
     }
