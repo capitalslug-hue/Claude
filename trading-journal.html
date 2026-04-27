@@ -120,6 +120,13 @@ canvas{max-height:300px}
 /* Settings */
 .settings-form{display:flex;flex-direction:column;gap:16px}
 .api-key-input{font-family:monospace;letter-spacing:1px}
+.theme-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:4px}
+.theme-swatch{border:2px solid var(--border);border-radius:8px;padding:12px;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:10px}
+.theme-swatch:hover{border-color:var(--accent-cyan);transform:translateY(-1px)}
+.theme-swatch.selected{border-color:var(--accent-cyan);box-shadow:0 0 0 1px var(--accent-cyan)}
+.theme-dots{display:flex;gap:4px}
+.theme-dot{width:10px;height:10px;border-radius:50%}
+.theme-name{font-size:13px;color:var(--text-primary);font-weight:500}
 #toast{position:fixed;bottom:20px;right:20px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:16px 20px;color:var(--text-primary);opacity:0;pointer-events:none;transition:opacity .3s;z-index:2000}
 #toast.show{opacity:1;pointer-events:auto}
 #toast.success{border-color:var(--accent-green)}
@@ -386,6 +393,27 @@ canvas{max-height:300px}
 <label>Finnhub API Key (for Market Brief)</label>
 <input type="password" id="settings-finnhub-key" class="api-key-input" placeholder="finnhub_...">
 <small style="color:var(--text-secondary);margin-top:6px;display:block">Optional. Get free key at <a href="https://finnhub.io/register" target="_blank" style="color:var(--accent-cyan);text-decoration:none">finnhub.io/register</a>. Stored locally in your browser only.</small>
+</div>
+<div class="form-group">
+<label>Dashboard Theme</label>
+<div class="theme-grid" id="theme-grid">
+<div class="theme-swatch selected" data-theme="ocean" onclick="Themes.apply('ocean')">
+  <div class="theme-dots"><div class="theme-dot" style="background:#0a0e1a;border:1px solid #444"></div><div class="theme-dot" style="background:#00d4ff"></div><div class="theme-dot" style="background:#00ff88"></div></div>
+  <span class="theme-name">Ocean</span>
+</div>
+<div class="theme-swatch" data-theme="midnight" onclick="Themes.apply('midnight')">
+  <div class="theme-dots"><div class="theme-dot" style="background:#0e0e1a;border:1px solid #444"></div><div class="theme-dot" style="background:#7c6df0"></div><div class="theme-dot" style="background:#a78bfa"></div></div>
+  <span class="theme-name">Midnight</span>
+</div>
+<div class="theme-swatch" data-theme="slate" onclick="Themes.apply('slate')">
+  <div class="theme-dots"><div class="theme-dot" style="background:#0f172a;border:1px solid #444"></div><div class="theme-dot" style="background:#38bdf8"></div><div class="theme-dot" style="background:#34d399"></div></div>
+  <span class="theme-name">Slate</span>
+</div>
+<div class="theme-swatch" data-theme="carbon" onclick="Themes.apply('carbon')">
+  <div class="theme-dots"><div class="theme-dot" style="background:#111111;border:1px solid #444"></div><div class="theme-dot" style="background:#f59e0b"></div><div class="theme-dot" style="background:#fb923c"></div></div>
+  <span class="theme-name">Carbon</span>
+</div>
+</div>
 </div>
 <button class="btn-primary" id="save-settings-btn" style="grid-column:unset">Save Settings</button>
 </div></div></div>
@@ -1031,7 +1059,7 @@ const Charts={
 
 const App={
     init(){
-        Storage.migrate();
+        Storage.migrate();Themes.init();
         const journal=Storage.getJournal();
         this.updateJournalUI(journal);
         let trades=Storage.load();
@@ -1071,6 +1099,8 @@ const App={
         document.getElementById('csv-file-input').addEventListener('change',e=>{if(e.target.files[0])ScreenshotImport.handleFile(e.target.files[0]);});
         document.getElementById('settings-btn').addEventListener('click',()=>{
             document.getElementById('settings-modal').classList.add('active');
+            const cur=localStorage.getItem('tjd_theme')||'ocean';
+            document.querySelectorAll('.theme-swatch').forEach(s=>s.classList.toggle('selected',s.dataset.theme===cur));
         });
         document.getElementById('save-settings-btn').addEventListener('click',()=>{
             Settings.save({apiKey:document.getElementById('settings-api-key').value.trim(),autoCoach:document.getElementById('settings-auto-coach').value,finnhubKey:document.getElementById('settings-finnhub-key').value.trim()});
@@ -1128,6 +1158,44 @@ const App={
         if(s)trades=trades.filter(t=>t.strategy===s);
         if(r)trades=trades.filter(t=>t.result===r);
         Table.render(trades);
+    }
+};
+
+const Themes = {
+    themes:{
+        ocean:{
+            '--bg-primary':'#0a0e1a','--bg-secondary':'#111827','--bg-card':'#1a1f35','--bg-card-hover':'#1f2640',
+            '--border':'#2a3050','--accent-cyan':'#00d4ff','--accent-green':'#00ff88','--accent-red':'#ff4d6d',
+            '--accent-yellow':'#ffd700','--text-primary':'#e2e8f0','--text-secondary':'#94a3b8','--text-muted':'#4a5568'
+        },
+        midnight:{
+            '--bg-primary':'#0e0e1a','--bg-secondary':'#13131f','--bg-card':'#1a1a2e','--bg-card-hover':'#1f1f38',
+            '--border':'#2d2b4e','--accent-cyan':'#7c6df0','--accent-green':'#a78bfa','--accent-red':'#f87171',
+            '--accent-yellow':'#c4b5fd','--text-primary':'#e2e2f0','--text-secondary':'#9090b0','--text-muted':'#4a4a65'
+        },
+        slate:{
+            '--bg-primary':'#0f172a','--bg-secondary':'#1e293b','--bg-card':'#1e3a5f','--bg-card-hover':'#234876',
+            '--border':'#2d4a6e','--accent-cyan':'#38bdf8','--accent-green':'#34d399','--accent-red':'#f87171',
+            '--accent-yellow':'#fbbf24','--text-primary':'#e2e8f0','--text-secondary':'#94a3b8','--text-muted':'#475569'
+        },
+        carbon:{
+            '--bg-primary':'#111111','--bg-secondary':'#1a1a1a','--bg-card':'#222222','--bg-card-hover':'#2a2a2a',
+            '--border':'#333333','--accent-cyan':'#f59e0b','--accent-green':'#34d399','--accent-red':'#f87171',
+            '--accent-yellow':'#fb923c','--text-primary':'#e5e5e5','--text-secondary':'#a3a3a3','--text-muted':'#525252'
+        }
+    },
+    apply(name){
+        const t=this.themes[name];if(!t)return;
+        const root=document.documentElement;
+        Object.entries(t).forEach(([k,v])=>root.style.setProperty(k,v));
+        localStorage.setItem('tjd_theme',name);
+        document.querySelectorAll('.theme-swatch').forEach(s=>{
+            s.classList.toggle('selected',s.dataset.theme===name);
+        });
+    },
+    init(){
+        const saved=localStorage.getItem('tjd_theme')||'ocean';
+        this.apply(saved);
     }
 };
 
