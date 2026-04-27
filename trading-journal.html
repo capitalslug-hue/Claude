@@ -25,6 +25,11 @@ body{background:var(--bg-primary);color:var(--text-primary);font-family:-apple-s
 .btn-import:hover{background:#00a8cc}
 .btn-settings{width:100%;padding:8px;background:var(--bg-card);color:var(--text-secondary);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:13px;transition:all .2s}
 .btn-settings:hover{border-color:var(--accent-cyan);color:var(--text-primary)}
+.journal-switcher{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.journal-btn{flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;transition:all .2s;background:var(--bg-card);color:var(--text-secondary)}
+.journal-btn.live.active{background:rgba(0,255,136,.15);border-color:var(--accent-green);color:var(--accent-green)}
+.journal-btn.paper.active{background:rgba(0,212,255,.15);border-color:var(--accent-cyan);color:var(--accent-cyan)}
+.journal-btn:hover{border-color:var(--accent-cyan);color:var(--text-primary)}
 #main-content{margin-left:260px;padding:24px;flex:1;min-height:100vh}
 .section-hidden{display:none!important}
 section{margin-bottom:32px}
@@ -128,6 +133,10 @@ canvas{max-height:300px}
 <div id="app">
 <aside id="sidebar">
 <div class="sidebar-logo">📊 Trading Journal</div>
+<div class="journal-switcher">
+<button class="journal-btn live active" id="btn-journal-live">🟢 Live</button>
+<button class="journal-btn paper" id="btn-journal-paper">📄 Paper</button>
+</div>
 <nav class="sidebar-nav">
 <button class="nav-btn active" data-section="overview">Overview</button>
 <button class="nav-btn" data-section="trade-entry">Add Trade</button>
@@ -368,30 +377,30 @@ const Settings = {
 };
 
 const Storage = {
-    key:'tjd_trades',
+    getJournal(){return localStorage.getItem('tjd_active_journal')||'live'},
+    setJournal(j){localStorage.setItem('tjd_active_journal',j)},
+    get key(){return'tjd_trades_'+this.getJournal()},
+    get coachPrefix(){return'tjd_coach_'+this.getJournal()+'_'},
     load(){const d=localStorage.getItem(this.key);return d?JSON.parse(d):[]},
     save(t){localStorage.setItem(this.key,JSON.stringify(t))},
     clear(){localStorage.removeItem(this.key)},
-    saveCoachFeedback(tradeId,fb){
-        const key='tjd_coach_'+tradeId;
-        localStorage.setItem(key,JSON.stringify(fb));
-    },
-    loadCoachFeedback(tradeId){
-        const d=localStorage.getItem('tjd_coach_'+tradeId);
-        return d?JSON.parse(d):null;
-    },
+    saveCoachFeedback(tradeId,fb){localStorage.setItem(this.coachPrefix+tradeId,JSON.stringify(fb));},
+    loadCoachFeedback(tradeId){const d=localStorage.getItem(this.coachPrefix+tradeId);return d?JSON.parse(d):null;},
     allCoachFeedbacks(){
-        const results=[];
+        const results=[],prefix=this.coachPrefix,trades=Storage.load();
         for(let i=0;i<localStorage.length;i++){
             const k=localStorage.key(i);
-            if(k&&k.startsWith('tjd_coach_')){
-                const tradeId=k.replace('tjd_coach_','');
-                const trades=Storage.load();
+            if(k&&k.startsWith(prefix)){
+                const tradeId=k.replace(prefix,'');
                 const trade=trades.find(t=>t.id===tradeId);
                 if(trade){results.push({trade,feedback:JSON.parse(localStorage.getItem(k))});}
             }
         }
         return results.sort((a,b)=>new Date(b.trade.date)-new Date(a.trade.date));
+    },
+    migrate(){
+        const old=localStorage.getItem('tjd_trades');
+        if(old&&!localStorage.getItem('tjd_trades_live')){localStorage.setItem('tjd_trades_live',old);}
     }
 };
 
@@ -941,11 +950,15 @@ const Charts={
 
 const App={
     init(){
+        Storage.migrate();
+        const journal=Storage.getJournal();
+        this.updateJournalUI(journal);
         let trades=Storage.load();
-        if(!trades.length&&!localStorage.getItem('tjd_app_initialized')){
+        const seedKey='tjd_initialized_'+journal;
+        if(!trades.length&&!localStorage.getItem(seedKey)){
             trades=SampleData.generate();Storage.save(trades);
         }
-        localStorage.setItem('tjd_app_initialized','1');
+        localStorage.setItem(seedKey,'1');
         Navigation.init();Form.init();Charts.init();News.init();Balance.init(trades);
         this.bindEvents();this.update();
         const s=Settings.load();
@@ -953,7 +966,26 @@ const App={
         document.getElementById('settings-auto-coach').value=s.autoCoach;
         if(s.finnhubKey){document.getElementById('settings-finnhub-key').value=s.finnhubKey;}
     },
+    updateJournalUI(journal){
+        document.getElementById('btn-journal-live').classList.toggle('active',journal==='live');
+        document.getElementById('btn-journal-paper').classList.toggle('active',journal==='paper');
+        document.querySelector('.sidebar-logo').textContent=journal==='live'?'📊 Trading Journal — LIVE':'📊 Trading Journal — PAPER';
+    },
+    switchJournal(journal){
+        Storage.setJournal(journal);
+        this.updateJournalUI(journal);
+        const seedKey='tjd_initialized_'+journal;
+        let trades=Storage.load();
+        if(!trades.length&&!localStorage.getItem(seedKey)&&journal==='live'){
+            trades=SampleData.generate();Storage.save(trades);localStorage.setItem(seedKey,'1');
+        }
+        Balance.init(trades);
+        this.update();
+        Toast.show('Switched to '+(journal==='live'?'Live':'Paper')+' journal');
+    },
     bindEvents(){
+        document.getElementById('btn-journal-live').addEventListener('click',()=>this.switchJournal('live'));
+        document.getElementById('btn-journal-paper').addEventListener('click',()=>this.switchJournal('paper'));
         document.getElementById('import-btn').addEventListener('click',()=>document.getElementById('csv-file-input').click());
         document.getElementById('csv-file-input').addEventListener('change',e=>{if(e.target.files[0])ScreenshotImport.handleFile(e.target.files[0]);});
         document.getElementById('settings-btn').addEventListener('click',()=>{
