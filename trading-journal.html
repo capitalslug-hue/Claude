@@ -697,20 +697,22 @@ const Form={
     },
     async submitScreenshot(e){
         e.preventDefault();
+        try{
+        const contract=document.getElementById('screenshot-contract').value;
         const fd={
             date:document.getElementById('screenshot-date').value,
-            contract:document.getElementById('screenshot-contract').value,
-            numContracts:document.getElementById('screenshot-contracts').value,
+            contract,
+            numContracts:parseFloat(document.getElementById('screenshot-contracts').value)||1,
             direction:document.getElementById('screenshot-direction').value,
-            entryPrice:document.getElementById('screenshot-entry').value,
-            exitPrice:document.getElementById('screenshot-exit').value,
-            pointValue:CONTRACTS[document.getElementById('screenshot-contract').value]?.pointValue||0,
-            stopLoss:document.getElementById('screenshot-sl').value,
-            takeProfit:document.getElementById('screenshot-tp').value,
+            entryPrice:parseFloat(document.getElementById('screenshot-entry').value),
+            exitPrice:parseFloat(document.getElementById('screenshot-exit').value),
+            pointValue:CONTRACTS[contract]?.pointValue||5,
+            stopLoss:document.getElementById('screenshot-sl').value||null,
+            takeProfit:document.getElementById('screenshot-tp').value||null,
             strategy:document.getElementById('screenshot-strategy').value,
             notes:document.getElementById('screenshot-notes').value
         };
-        if(!fd.date||!fd.entryPrice||!fd.exitPrice){Toast.show('Fill in required fields','error');return;}
+        if(!fd.date||!fd.entryPrice||!fd.exitPrice){Toast.show('Fill in date, entry and exit price','error');return;}
         const calc=Calculator.compute(fd);
         const rated=Rater.rate({...fd,...calc});
         const trade={...fd,id:`${Date.now()}-${Math.random().toString(36).substr(2,5)}`,...calc,rating:rated.rating,ratingFeedback:rated.feedback,importSource:'screenshot'};
@@ -729,6 +731,10 @@ const Form={
             Coach.showSpinner(content);
             const fb=await Coach.analyze(trade,Storage.load());
             if(fb){Coach.renderFeedback(fb,content);Storage.saveCoachFeedback(trade.id,fb);}
+        }
+        }catch(err){
+            console.error('Screenshot save error:',err);
+            Toast.show('Error saving trade: '+err.message,'error');
         }
     }
 };
@@ -917,7 +923,10 @@ const Charts={
 const App={
     init(){
         let trades=Storage.load();
-        if(!trades.length){trades=SampleData.generate();Storage.save(trades);}
+        if(!trades.length&&!localStorage.getItem('tjd_app_initialized')){
+            trades=SampleData.generate();Storage.save(trades);
+        }
+        localStorage.setItem('tjd_app_initialized','1');
         Navigation.init();Form.init();Charts.init();News.init();
         this.bindEvents();this.update();
         const s=Settings.load();
