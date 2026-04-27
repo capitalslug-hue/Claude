@@ -137,6 +137,7 @@ canvas{max-height:300px}
 <button class="nav-btn" data-section="review">Trade Review</button>
 <button class="nav-btn" data-section="coach-history">🤖 Coach History</button>
 <button class="nav-btn" data-section="morning-brief">📰 Market Brief</button>
+<button class="nav-btn" data-section="balance-history">💰 Balance History</button>
 </nav>
 <div class="sidebar-footer">
 <button class="btn-import" id="import-btn">📷 Import Screenshot</button>
@@ -172,6 +173,7 @@ canvas{max-height:300px}
 <div class="form-group"><label>Point Value (auto)</label><input type="number" id="form-point-value" step="0.01" readonly></div>
 <div class="form-group"><label>Stop Loss</label><input type="number" id="form-sl" step="0.01"></div>
 <div class="form-group"><label>Take Profit</label><input type="number" id="form-tp" step="0.01"></div>
+<div class="form-group"><label>Balance After Trade ($)</label><input type="number" id="form-balance-after" step="0.01" placeholder="Optional"></div>
 <div class="form-group"><label>Strategy</label>
 <select id="form-strategy">
 <option value="">Select Strategy</option>
@@ -250,6 +252,16 @@ canvas{max-height:300px}
 </div>
 <div id="news-content" style="color:var(--text-secondary)">Loading market data...</div>
 </section>
+
+<section id="balance-history" class="section-hidden">
+<h2>💰 Balance History</h2>
+<div id="balance-stat-cards" class="stat-cards" style="margin-bottom:20px"></div>
+<div class="chart-container" style="height:350px">
+<h3>Account Balance Over Time</h3>
+<canvas id="chart-balance"></canvas>
+</div>
+<div id="balance-trades-list" style="margin-top:20px"></div>
+</section>
 </main>
 </div>
 
@@ -272,6 +284,7 @@ canvas{max-height:300px}
 <div class="form-group"><label>Point Value</label><input type="number" id="edit-point-value" step="0.01"></div>
 <div class="form-group"><label>Stop Loss</label><input type="number" id="edit-sl" step="0.01"></div>
 <div class="form-group"><label>Take Profit</label><input type="number" id="edit-tp" step="0.01"></div>
+<div class="form-group"><label>Balance After ($)</label><input type="number" id="edit-balance-after" step="0.01" placeholder="Optional"></div>
 <div class="form-group"><label>Strategy</label><input type="text" id="edit-strategy"></div>
 <div class="form-group form-row"><label>Notes</label><textarea id="edit-notes"></textarea></div>
 <button type="submit" class="btn-primary">Update Trade</button>
@@ -296,6 +309,7 @@ canvas{max-height:300px}
 <div class="form-group"><label>Contracts</label><input type="number" id="screenshot-contracts" min="1" step="1" value="1" required></div>
 <div class="form-group"><label>Stop Loss</label><input type="number" id="screenshot-sl" step="0.01"></div>
 <div class="form-group"><label>Take Profit</label><input type="number" id="screenshot-tp" step="0.01"></div>
+<div class="form-group"><label>Balance After ($)</label><input type="number" id="screenshot-balance-after" step="0.01" placeholder="Optional"></div>
 <div class="form-group"><label>Strategy</label><input type="text" id="screenshot-strategy"></div>
 <textarea id="screenshot-notes" placeholder="Notes..."></textarea>
 <button type="submit" class="btn-primary" style="grid-column:1/-1">Add Trade</button>
@@ -646,7 +660,8 @@ const Form={
             stopLoss:document.getElementById('form-sl').value,
             takeProfit:document.getElementById('form-tp').value,
             strategy:document.getElementById('form-strategy').value,
-            notes:document.getElementById('form-notes').value
+            notes:document.getElementById('form-notes').value,
+            balanceAfter:parseFloat(document.getElementById('form-balance-after').value)||null
         };
         if(!fd.date||!fd.entryPrice||!fd.exitPrice){Toast.show('Fill in required fields','error');return;}
         const calc=Calculator.compute(fd);
@@ -685,6 +700,7 @@ const Form={
             pointValue:document.getElementById('edit-point-value').value,
             stopLoss:document.getElementById('edit-sl').value,
             takeProfit:document.getElementById('edit-tp').value,
+            balanceAfter:parseFloat(document.getElementById('edit-balance-after').value)||null,
             strategy:document.getElementById('edit-strategy').value,
             notes:document.getElementById('edit-notes').value
         };
@@ -710,7 +726,8 @@ const Form={
             stopLoss:document.getElementById('screenshot-sl').value||null,
             takeProfit:document.getElementById('screenshot-tp').value||null,
             strategy:document.getElementById('screenshot-strategy').value,
-            notes:document.getElementById('screenshot-notes').value
+            notes:document.getElementById('screenshot-notes').value,
+            balanceAfter:parseFloat(document.getElementById('screenshot-balance-after').value)||null
         };
         if(!fd.date||!fd.entryPrice||!fd.exitPrice){Toast.show('Fill in date, entry and exit price','error');return;}
         const calc=Calculator.compute(fd);
@@ -757,7 +774,7 @@ const ScreenshotImport={
         status.textContent='🤖 AI reading your screenshot...';
         const base64=dataUrl.split(',')[1];
         const mediaType=mimeType||'image/jpeg';
-        const prompt='Extract trade details from this trading screenshot. Return ONLY valid JSON with these fields (use null if not visible): {"contract":"MES","direction":"long","entryPrice":5100.25,"exitPrice":5115.50,"numContracts":2,"stopLoss":5090.00,"takeProfit":5130.00,"strategy":"breakout","notes":""}. For contract, match to: MES, MNQ, MCL, MGC, ES, NQ, CL, or GC.';
+        const prompt='Extract trade details from this trading screenshot. Return ONLY valid JSON with these fields (use null if not visible): {"contract":"MES","direction":"long","entryPrice":5100.25,"exitPrice":5115.50,"numContracts":2,"stopLoss":5090.00,"takeProfit":5130.00,"strategy":"breakout","notes":"","accountBalance":50000.00}. For contract, match to: MES, MNQ, MCL, MGC, ES, NQ, CL, or GC. For accountBalance, look for any visible account balance, total equity, or net liquidation value.';
         try{
             const res=await fetch('https://api.anthropic.com/v1/messages',{
                 method:'POST',
@@ -785,6 +802,7 @@ const ScreenshotImport={
             if(extracted.takeProfit)document.getElementById('screenshot-tp').value=extracted.takeProfit;
             if(extracted.strategy)document.getElementById('screenshot-strategy').value=extracted.strategy;
             if(extracted.notes)document.getElementById('screenshot-notes').value=extracted.notes;
+            if(extracted.accountBalance)document.getElementById('screenshot-balance-after').value=extracted.accountBalance;
             status.textContent='✅ AI auto-filled the form — please verify and adjust as needed.';
             status.style.color='var(--accent-green)';
         }catch(err){
@@ -867,6 +885,7 @@ const Table={
         document.getElementById('edit-point-value').value=t.pointValue;
         document.getElementById('edit-sl').value=t.stopLoss||'';
         document.getElementById('edit-tp').value=t.takeProfit||'';
+        document.getElementById('edit-balance-after').value=t.balanceAfter||'';
         document.getElementById('edit-strategy').value=t.strategy||'';
         document.getElementById('edit-notes').value=t.notes||'';
         document.getElementById('edit-modal').dataset.tradeId=id;
@@ -927,7 +946,7 @@ const App={
             trades=SampleData.generate();Storage.save(trades);
         }
         localStorage.setItem('tjd_app_initialized','1');
-        Navigation.init();Form.init();Charts.init();News.init();
+        Navigation.init();Form.init();Charts.init();News.init();Balance.init(trades);
         this.bindEvents();this.update();
         const s=Settings.load();
         if(s.apiKey){document.getElementById('settings-api-key').value=s.apiKey;}
@@ -957,7 +976,7 @@ const App={
         Dashboard.update(trades);
         Table.render(trades);
         Charts.updateAll(trades);
-        Coach.renderHistory();
+        Coach.renderHistory();Balance.render(trades);
         this.updateStats(trades);
         this.updateFilters(trades);
     },
@@ -997,6 +1016,60 @@ const App={
         if(r)trades=trades.filter(t=>t.result===r);
         Table.render(trades);
     }
+};
+
+const Balance = {
+    chart:null,
+    getTrades(trades){return trades.filter(t=>t.balanceAfter!=null).sort((a,b)=>a.date.localeCompare(b.date));},
+    getStats(trades){
+        const bt=this.getTrades(trades);
+        if(!bt.length)return null;
+        const starting=bt[0].balanceAfter,current=bt[bt.length-1].balanceAfter;
+        const gain=current-starting,gainPct=(gain/starting)*100;
+        let peak=starting,maxDD=0;
+        bt.forEach(t=>{if(t.balanceAfter>peak)peak=t.balanceAfter;maxDD=Math.max(maxDD,peak-t.balanceAfter);});
+        return{starting,current,gain,gainPct,maxDD,peak};
+    },
+    initChart(){
+        const ctx=document.getElementById('chart-balance');
+        if(!ctx)return;
+        if(this.chart){this.chart.destroy();}
+        this.chart=new Chart(ctx,{
+            type:'line',
+            data:{labels:[],datasets:[{label:'Account Balance',data:[],borderColor:'#00d4ff',backgroundColor:'rgba(0,212,255,0.1)',fill:true,tension:.4,pointRadius:4,pointHoverRadius:6}]},
+            options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'#2a3050'}},y:{ticks:{color:'#94a3b8',callback:v=>'$'+v.toLocaleString()},grid:{color:'#2a3050'}}}}
+        });
+    },
+    render(trades){
+        const bt=this.getTrades(trades);
+        const stats=this.getStats(trades);
+        const cards=document.getElementById('balance-stat-cards');
+        const list=document.getElementById('balance-trades-list');
+        if(!cards||!list)return;
+        if(!bt.length){
+            cards.innerHTML='<p style="color:var(--text-secondary)">No balance data yet. Add "Balance After Trade" when logging trades.</p>';
+            list.innerHTML='';
+            if(this.chart){this.chart.data.labels=[];this.chart.data.datasets[0].data=[];this.chart.update();}
+            return;
+        }
+        const fmt=n=>'$'+n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+        const cardData=[
+            {label:'Current Balance',value:fmt(stats.current),color:'var(--accent-cyan)'},
+            {label:'Starting Balance',value:fmt(stats.starting),color:'var(--text-primary)'},
+            {label:'Total Gain/Loss',value:(stats.gain>=0?'+':'')+fmt(stats.gain),color:stats.gain>=0?'var(--accent-green)':'var(--accent-red)'},
+            {label:'Return %',value:(stats.gainPct>=0?'+':'')+stats.gainPct.toFixed(2)+'%',color:stats.gainPct>=0?'var(--accent-green)':'var(--accent-red)'},
+            {label:'Peak Balance',value:fmt(stats.peak),color:'var(--accent-yellow)'},
+            {label:'Max Drawdown',value:fmt(stats.maxDD),color:'var(--accent-red)'}
+        ];
+        cards.innerHTML=cardData.map(c=>`<div class="stat-card"><div class="stat-value" style="color:${c.color}">${c.value}</div><div class="stat-label">${c.label}</div></div>`).join('');
+        if(this.chart){
+            this.chart.data.labels=bt.map(t=>t.date);
+            this.chart.data.datasets[0].data=bt.map(t=>t.balanceAfter);
+            this.chart.update();
+        }
+        list.innerHTML=`<h3 style="margin-bottom:12px;font-size:16px">Balance Log</h3><table class="trade-table"><thead><tr><th>Date</th><th>Contract</th><th>P&L</th><th>Balance After</th></tr></thead><tbody>${bt.map(t=>`<tr><td>${t.date}</td><td>${t.contract}</td><td style="color:${t.pnlDollar>=0?'var(--accent-green)':'var(--accent-red)'}">${t.pnlDollar>=0?'+':''}$${t.pnlDollar.toFixed(2)}</td><td style="color:var(--accent-cyan);font-weight:600">$${t.balanceAfter.toLocaleString()}</td></tr>`).join('')}</tbody></table>`;
+    },
+    init(trades){this.initChart();this.render(trades);}
 };
 
 const News = {
