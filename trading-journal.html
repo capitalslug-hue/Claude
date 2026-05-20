@@ -453,6 +453,30 @@ canvas{max-height:300px}
 </div>
 </div>
 </div>
+<div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
+<div style="font-size:13px;font-weight:600;color:var(--accent-cyan);margin-bottom:12px">☁️ Cross-Device Sync (Firebase)</div>
+<div class="form-group">
+<label>Sync ID</label>
+<input type="text" id="settings-sync-id" placeholder="e.g. hawk-trader-9241" style="font-family:monospace;letter-spacing:1px">
+<small style="color:var(--text-secondary);margin-top:6px;display:block">Make up any unique phrase. Enter the same ID on every device. Keep it private — anyone with this ID and your Firebase config can read your trades.</small>
+</div>
+<div class="form-group">
+<label>Firebase API Key</label>
+<input type="password" id="settings-fb-api-key" class="api-key-input" placeholder="AIzaSy...">
+</div>
+<div class="form-group">
+<label>Firebase Project ID</label>
+<input type="text" id="settings-fb-project-id" placeholder="my-journal-12345" style="font-family:monospace">
+</div>
+<div class="form-group">
+<label>Firebase App ID</label>
+<input type="password" id="settings-fb-app-id" class="api-key-input" placeholder="1:123456789:web:abc123...">
+</div>
+<div id="sync-status-badge" style="font-size:12px;padding:8px;border-radius:4px;background:var(--bg-secondary);color:var(--text-secondary);margin-top:4px">Sync: Not configured</div>
+<div style="margin-top:10px;font-size:12px;color:var(--text-muted)">
+Setup: <a href="https://console.firebase.google.com" target="_blank" style="color:var(--accent-cyan);text-decoration:none">console.firebase.google.com</a> → New project → Add Web App → Enable Firestore (test mode) → paste the 3 values above.
+</div>
+</div>
 <button class="btn-primary" id="save-settings-btn" style="grid-column:unset">Save Settings</button>
 </div></div></div>
 
@@ -468,6 +492,8 @@ canvas{max-height:300px}
 </div></div>
 <div id="toast"></div>
 <input type="file" id="csv-file-input" accept="image/*" style="display:none">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
 
 const CONTRACTS = {
@@ -479,6 +505,85 @@ const CONTRACTS = {
     NQ:{pointValue:20,tickSize:.25,label:'E-mini Nasdaq-100'},
     CL:{pointValue:1000,tickSize:.01,label:'WTI Crude Oil'},
     GC:{pointValue:100,tickSize:.10,label:'Gold'}
+};
+
+const FirebaseSync = {
+    db:null,
+    _unsubs:[],
+    _ignoreNext:false,
+    _initialized:false,
+    KEYS:{syncId:'tjd_sync_id',apiKey:'tjd_fb_api_key',projectId:'tjd_fb_project_id',appId:'tjd_fb_app_id'},
+    getConfig(){
+        return{
+            syncId:localStorage.getItem(this.KEYS.syncId)||'',
+            apiKey:localStorage.getItem(this.KEYS.apiKey)||'',
+            projectId:localStorage.getItem(this.KEYS.projectId)||'',
+            appId:localStorage.getItem(this.KEYS.appId)||''
+        };
+    },
+    saveConfig(cfg){Object.entries(cfg).forEach(([k,v])=>localStorage.setItem(this.KEYS[k],v||''));},
+    isConfigured(){const c=this.getConfig();return!!(c.syncId&&c.apiKey&&c.projectId&&c.appId);},
+    init(){
+        if(!this.isConfigured())return;
+        const cfg=this.getConfig();
+        try{
+            if(typeof firebase==='undefined')return;
+            if(!firebase.apps.length){
+                firebase.initializeApp({apiKey:cfg.apiKey,projectId:cfg.projectId,appId:cfg.appId});
+            }
+            this.db=firebase.firestore();
+            this._initialized=true;
+            this._startListeners();
+            this._updateStatusBadge();
+            Toast.show('☁️ Cloud sync connected');
+        }catch(e){
+            console.error('FirebaseSync init error:',e);
+            Toast.show('Sync config error — check Firebase settings','error');
+        }
+    },
+    _tradesDoc(journal){
+        const{syncId}=this.getConfig();
+        return this.db.collection('journals').doc(syncId).collection(journal).doc('trades');
+    },
+    _coachDoc(journal,tradeId){
+        const{syncId}=this.getConfig();
+        return this.db.collection('journals').doc(syncId).collection(journal+'_coach').doc(tradeId);
+    },
+    async push(journal,trades){
+        if(!this._initialized)return;
+        this._ignoreNext=true;
+        try{await this._tradesDoc(journal).set({trades,updatedAt:Date.now()});}
+        catch(e){console.warn('Sync push failed:',e);}
+    },
+    async pushCoach(journal,tradeId,feedback){
+        if(!this._initialized)return;
+        try{await this._coachDoc(journal,tradeId).set(feedback);}
+        catch(e){console.warn('Coach sync push failed:',e);}
+    },
+    _startListeners(){
+        ['live','paper'].forEach(journal=>{
+            const unsub=this._tradesDoc(journal).onSnapshot(snap=>{
+                if(this._ignoreNext){this._ignoreNext=false;return;}
+                if(!snap.exists)return;
+                const remote=snap.data().trades;
+                if(!remote)return;
+                const currentLocal=localStorage.getItem('tjd_trades_'+journal);
+                const remoteStr=JSON.stringify(remote);
+                if(currentLocal===remoteStr)return;
+                localStorage.setItem('tjd_trades_'+journal,remoteStr);
+                if(Storage.getJournal()===journal){App.update();Toast.show('☁️ Synced from another device');}
+            },err=>console.warn('Sync listener error:',err));
+            this._unsubs.push(unsub);
+        });
+    },
+    stop(){this._unsubs.forEach(fn=>fn());this._unsubs=[];this._initialized=false;this.db=null;},
+    restart(){this.stop();this.init();},
+    _updateStatusBadge(){
+        const badge=document.getElementById('sync-status-badge');
+        if(!badge)return;
+        badge.textContent=this._initialized?'✅ Sync: Connected':'⚠️ Sync: Not configured';
+        badge.style.color=this._initialized?'var(--accent-green)':'var(--text-secondary)';
+    }
 };
 
 const Settings = {
@@ -494,9 +599,9 @@ const Storage = {
     get key(){return'tjd_trades_'+this.getJournal()},
     get coachPrefix(){return'tjd_coach_'+this.getJournal()+'_'},
     load(){const d=localStorage.getItem(this.key);return d?JSON.parse(d):[]},
-    save(t){localStorage.setItem(this.key,JSON.stringify(t))},
+    save(t){localStorage.setItem(this.key,JSON.stringify(t));if(FirebaseSync._initialized)FirebaseSync.push(this.getJournal(),t);},
     clear(){localStorage.removeItem(this.key)},
-    saveCoachFeedback(tradeId,fb){localStorage.setItem(this.coachPrefix+tradeId,JSON.stringify(fb));},
+    saveCoachFeedback(tradeId,fb){localStorage.setItem(this.coachPrefix+tradeId,JSON.stringify(fb));if(FirebaseSync._initialized)FirebaseSync.pushCoach(this.getJournal(),tradeId,fb);},
     loadCoachFeedback(tradeId){const d=localStorage.getItem(this.coachPrefix+tradeId);return d?JSON.parse(d):null;},
     allCoachFeedbacks(){
         const results=[],prefix=this.coachPrefix,trades=Storage.load();
@@ -1212,7 +1317,7 @@ const Charts={
 
 const App={
     init(){
-        Storage.migrate();Themes.init();
+        Storage.migrate();FirebaseSync.init();Themes.init();
         const journal=Storage.getJournal();
         this.updateJournalUI(journal);
         let trades=Storage.load();
@@ -1256,9 +1361,17 @@ const App={
             document.getElementById('settings-modal').classList.add('active');
             const cur=localStorage.getItem('tjd_theme')||'ocean';
             document.querySelectorAll('.theme-swatch').forEach(s=>s.classList.toggle('selected',s.dataset.theme===cur));
+            const fbCfg=FirebaseSync.getConfig();
+            document.getElementById('settings-sync-id').value=fbCfg.syncId;
+            document.getElementById('settings-fb-api-key').value=fbCfg.apiKey;
+            document.getElementById('settings-fb-project-id').value=fbCfg.projectId;
+            document.getElementById('settings-fb-app-id').value=fbCfg.appId;
+            FirebaseSync._updateStatusBadge();
         });
         document.getElementById('save-settings-btn').addEventListener('click',()=>{
             Settings.save({apiKey:document.getElementById('settings-api-key').value.trim(),autoCoach:document.getElementById('settings-auto-coach').value,finnhubKey:document.getElementById('settings-finnhub-key').value.trim(),dailyLossLimit:document.getElementById('settings-daily-limit').value||'0'});
+            FirebaseSync.saveConfig({syncId:document.getElementById('settings-sync-id').value.trim(),apiKey:document.getElementById('settings-fb-api-key').value.trim(),projectId:document.getElementById('settings-fb-project-id').value.trim(),appId:document.getElementById('settings-fb-app-id').value.trim()});
+            FirebaseSync.restart();
             document.getElementById('settings-modal').classList.remove('active');
             DailyLimit.check(Storage.load());
             Toast.show('Settings saved!');
