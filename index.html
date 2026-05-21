@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trading Journal Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+--bg-primary:#0a0e1a;--bg-secondary:#111827;--bg-card:#1a1f35;--bg-card-hover:#1f2640;
+--border:#2a3050;--accent-cyan:#00d4ff;--accent-green:#00ff88;--accent-red:#ff4d6d;
+--accent-yellow:#ffd700;--text-primary:#e2e8f0;--text-secondary:#94a3b8;--text-muted:#4a5568;
+}
+body{background:var(--bg-primary);color:var(--text-primary);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;line-height:1.6}
+#app{display:flex;min-height:100vh}
+#sidebar{position:fixed;left:0;top:0;width:260px;height:100vh;background:var(--bg-secondary);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;z-index:100}
+.sidebar-logo{padding:20px;border-bottom:1px solid var(--border);font-size:18px;font-weight:700;background:linear-gradient(135deg,var(--accent-cyan),var(--accent-green));background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.sidebar-nav{flex:1;padding:12px 0}
+.nav-btn{width:100%;padding:12px 20px;border:none;background:none;color:var(--text-secondary);text-align:left;cursor:pointer;transition:all .2s;font-size:14px;display:block}
+.nav-btn:hover{background:var(--bg-card);color:var(--text-primary)}
+.nav-btn.active{background:var(--bg-card);color:var(--accent-cyan);border-left:3px solid var(--accent-cyan);padding-left:17px}
+.sidebar-footer{padding:12px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+.btn-import{width:100%;padding:10px;background:var(--accent-cyan);color:var(--bg-primary);border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;transition:all .2s}
+.btn-import:hover{background:#00a8cc}
+.btn-settings{width:100%;padding:8px;background:var(--bg-card);color:var(--text-secondary);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:13px;transition:all .2s}
+.btn-settings:hover{border-color:var(--accent-cyan);color:var(--text-primary)}
+#main-content{margin-left:260px;padding:24px;flex:1;min-height:100vh}
+.section-hidden{display:none!important}
+section{margin-bottom:32px}
+h2{font-size:20px;margin-bottom:16px;color:var(--text-primary)}
+.stat-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px}
+.stat-card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:16px;transition:all .2s}
+.stat-card:hover{background:var(--bg-card-hover);border-color:var(--accent-cyan)}
+.stat-value{font-size:24px;font-weight:700;margin-bottom:4px}
+.stat-label{font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px}
+.stat-delta{font-size:12px;margin-top:8px}
+.stat-delta.positive{color:var(--accent-green)}.stat-delta.negative{color:var(--accent-red)}
+.form-grid{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px}
+.form-group{display:flex;flex-direction:column}
+label{font-size:12px;color:var(--text-secondary);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+input,select,textarea{background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:14px;font-family:inherit;transition:all .2s}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent-cyan);box-shadow:0 0 0 2px rgba(0,212,255,.1)}
+textarea{resize:vertical;min-height:80px}
+.form-row{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
+.preview-box{background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:12px;font-size:13px;grid-column:1/-1}
+.preview-item{display:flex;justify-content:space-between;margin-bottom:6px}
+.preview-label{color:var(--text-secondary)}.preview-value{color:var(--text-primary);font-weight:600}
+.btn-primary{background:var(--accent-cyan);color:var(--bg-primary);border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-weight:600;transition:all .2s;grid-column:1/-1}
+.btn-primary:hover{background:#00a8cc}
+.btn-secondary{background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border);padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px;transition:all .2s}
+.btn-secondary:hover{background:var(--bg-card);border-color:var(--accent-cyan)}
+.trade-table{width:100%;border-collapse:collapse;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.trade-table thead{background:var(--bg-secondary);position:sticky;top:0}
+.trade-table th{padding:12px;text-align:left;font-size:12px;font-weight:600;color:var(--text-secondary);border-bottom:1px solid var(--border);cursor:pointer;text-transform:uppercase;letter-spacing:.5px}
+.trade-table th:hover{background:var(--bg-card)}
+.trade-table td{padding:12px;border-bottom:1px solid var(--border);font-size:13px}
+.trade-table tbody tr:hover{background:var(--bg-card-hover)}
+.badge{display:inline-block;padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+.badge.win{background:rgba(0,255,136,.15);color:var(--accent-green)}
+.badge.loss{background:rgba(255,77,109,.15);color:var(--accent-red)}
+.badge.long{background:rgba(0,212,255,.15);color:var(--accent-cyan)}
+.badge.short{background:rgba(255,215,0,.15);color:var(--accent-yellow)}
+.action-btn{padding:4px 8px;font-size:11px;cursor:pointer;border-radius:4px;border:none;background:var(--border);color:var(--text-secondary);transition:all .2s;margin-right:4px}
+.action-btn:hover{background:var(--accent-cyan);color:var(--bg-primary)}
+.modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center}
+.modal-overlay.active{display:flex}
+.modal{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:24px;max-width:600px;width:90%;max-height:85vh;overflow-y:auto;position:relative}
+.modal-wide{max-width:900px}
+.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.modal-header h3{font-size:16px}
+.modal-close{background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:24px;line-height:1}
+.modal-close:hover{color:var(--text-primary)}
+.chart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:24px;margin-bottom:24px}
+.chart-container{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:16px;height:350px}
+.chart-container h3{font-size:14px;margin-bottom:12px;color:var(--text-secondary)}
+canvas{max-height:300px}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
+/* Coach Panel */
+.coach-panel{background:linear-gradient(135deg,#0d1b2e,#1a2540);border:1px solid var(--accent-cyan);border-radius:8px;padding:20px;margin-top:16px;display:none}
+.coach-panel.visible{display:block}
+.coach-header{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.coach-avatar{width:40px;height:40px;background:linear-gradient(135deg,var(--accent-cyan),var(--accent-green));border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.coach-title{font-weight:700;font-size:16px;color:var(--accent-cyan)}
+.coach-subtitle{font-size:12px;color:var(--text-secondary)}
+.coach-score{display:flex;align-items:center;gap:8px;margin-bottom:16px;padding:12px;background:rgba(0,212,255,.05);border-radius:6px;border:1px solid rgba(0,212,255,.2)}
+.coach-score-num{font-size:32px;font-weight:700;color:var(--accent-cyan)}
+.coach-score-label{font-size:12px;color:var(--text-secondary)}
+.coach-section{margin-bottom:14px}
+.coach-section-title{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.coach-section-title.good{color:var(--accent-green)}
+.coach-section-title.improve{color:var(--accent-yellow)}
+.coach-section-title.smc{color:var(--accent-cyan)}
+.coach-section-title.pattern{color:#a78bfa}
+.coach-bullets{list-style:none;padding:0}
+.coach-bullets li{padding:6px 0;padding-left:20px;position:relative;font-size:13px;color:var(--text-primary);border-bottom:1px solid rgba(255,255,255,.04)}
+.coach-bullets li::before{content:"•";position:absolute;left:6px;color:var(--text-secondary)}
+.coach-insight{font-size:13px;color:var(--text-primary);line-height:1.6;padding:10px;background:rgba(0,212,255,.05);border-radius:4px;border-left:3px solid var(--accent-cyan)}
+.coach-pattern{font-size:13px;color:var(--text-primary);padding:10px;background:rgba(167,139,250,.08);border-radius:4px;border-left:3px solid #a78bfa}
+.coach-spinner{text-align:center;padding:30px;color:var(--text-secondary)}
+.coach-spinner-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent-cyan);margin:0 3px;animation:bounce 1.2s ease-in-out infinite}
+.coach-spinner-dot:nth-child(2){animation-delay:.2s}
+.coach-spinner-dot:nth-child(3){animation-delay:.4s}
+@keyframes bounce{0%,80%,100%{transform:scale(0)}40%{transform:scale(1)}}
+/* Screenshot import */
+.screenshot-layout{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.screenshot-preview{background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:12px;max-height:400px;overflow-y:auto}
+.screenshot-preview img{width:100%;border-radius:4px}
+.screenshot-form{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.screenshot-form textarea{grid-column:1/-1}
+/* Settings */
+.settings-form{display:flex;flex-direction:column;gap:16px}
+.api-key-input{font-family:monospace;letter-spacing:1px}
+#toast{position:fixed;bottom:20px;right:20px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:16px 20px;color:var(--text-primary);opacity:0;pointer-events:none;transition:opacity .3s;z-index:2000}
+#toast.show{opacity:1;pointer-events:auto}
+#toast.success{border-color:var(--accent-green)}
+#toast.error{border-color:var(--accent-red)}
+.coach-history-item{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px;cursor:pointer;transition:all .2s}
+.coach-history-item:hover{border-color:var(--accent-cyan)}
+.coach-history-date{font-size:12px;color:var(--text-secondary);margin-bottom:4px}
+.coach-history-trade{font-weight:600;margin-bottom:6px}
+.coach-history-score{color:var(--accent-cyan);font-size:20px;font-weight:700}
+@media(max-width:1024px){.chart-grid{grid-template-columns:1fr}.screenshot-layout{grid-template-columns:1fr}}
+@media(max-width:768px){#sidebar{width:100%;height:auto;position:static;border-right:none;border-bottom:1px solid var(--border)}#main-content{margin-left:0;padding:12px}.stat-cards{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div id="app">
+<aside id="sidebar">
+<div class="sidebar-logo">📊 Trading Journal</div>
+<nav class="sidebar-nav">
+<button class="nav-btn active" data-section="overview">Overview</button>
+<button class="nav-btn" data-section="trade-entry">Add Trade</button>
+<button class="nav-btn" data-section="journal">Journal</button>
+<button class="nav-btn" data-section="statistics">Statistics</button>
+<button class="nav-btn" data-section="charts">Charts</button>
+<button class="nav-btn" data-section="review">Trade Review</button>
+<button class="nav-btn" data-section="coach-history">🤖 Coach History</button>
+</nav>
+<div class="sidebar-footer">
+<button class="btn-import" id="import-btn">📷 Import Screenshot</button>
+<button class="btn-settings" id="settings-btn">⚙️ Settings / API Key</button>
+</div>
+</aside>
+<main id="main-content">
+<section id="overview">
+<h2>Overview</h2>
+<div class="stat-cards" id="stat-cards"></div>
+</section>
+<section id="trade-entry" class="section-hidden">
+<h2>Add New Trade</h2>
+<form id="trade-form" class="form-grid">
+<div class="form-group"><label>Date</label><input type="date" id="form-date" required></div>
+<div class="form-group"><label>Contract</label>
+<select id="form-contract" required>
+<option value="MES">MES - Micro E-mini S&P 500</option>
+<option value="MNQ">MNQ - Micro E-mini Nasdaq</option>
+<option value="MCL">MCL - Micro WTI Crude Oil</option>
+<option value="MGC">MGC - Micro Gold</option>
+<option value="ES">ES - E-mini S&P 500</option>
+<option value="NQ">NQ - E-mini Nasdaq-100</option>
+<option value="CL">CL - WTI Crude Oil</option>
+<option value="GC">GC - Gold</option>
+<option value="custom">Custom</option>
+</select></div>
+<div class="form-group"><label>Direction</label>
+<select id="form-direction" required><option value="long">Long</option><option value="short">Short</option></select></div>
+<div class="form-group"><label>Entry Price</label><input type="number" id="form-entry" step="0.01" required></div>
+<div class="form-group"><label>Exit Price</label><input type="number" id="form-exit" step="0.01" required></div>
+<div class="form-group"><label>Contracts</label><input type="number" id="form-contracts" min="1" step="1" value="1" required></div>
+<div class="form-group"><label>Point Value (auto)</label><input type="number" id="form-point-value" step="0.01" readonly></div>
+<div class="form-group"><label>Stop Loss</label><input type="number" id="form-sl" step="0.01"></div>
+<div class="form-group"><label>Take Profit</label><input type="number" id="form-tp" step="0.01"></div>
+<div class="form-group"><label>Strategy</label>
+<select id="form-strategy">
+<option value="">Select Strategy</option>
+<option value="Breakout">Breakout</option>
+<option value="Trend Follow">Trend Follow</option>
+<option value="Mean Reversion">Mean Reversion</option>
+<option value="VWAP Reclaim">VWAP Reclaim</option>
+<option value="News Play">News Play</option>
+<option value="Opening Range">Opening Range</option>
+<option value="Gap Fill">Gap Fill</option>
+<option value="Order Block">Order Block</option>
+<option value="Fair Value Gap">Fair Value Gap</option>
+<option value="Liquidity Sweep">Liquidity Sweep</option>
+<option value="Breaker Block">Breaker Block</option>
+<option value="Custom">Custom</option>
+</select></div>
+<div class="form-group form-row"><label>Notes</label><textarea id="form-notes" placeholder="Trade setup notes, SMC confluences, observations..."></textarea></div>
+<div class="preview-box" id="form-preview"></div>
+<button type="submit" class="btn-primary">Add Trade</button>
+</form>
+<div class="coach-panel" id="coach-panel">
+<div class="coach-header">
+<div class="coach-avatar">🤖</div>
+<div><div class="coach-title">AI Trading Coach</div><div class="coach-subtitle">SMC Analysis</div></div>
+</div>
+<div id="coach-content"></div>
+</div>
+</section>
+<section id="journal" class="section-hidden">
+<h2>Trade Journal</h2>
+<div style="margin-bottom:16px;display:flex;gap:12px;flex-wrap:wrap">
+<select id="filter-contract" style="flex:1;min-width:120px"><option value="">All Contracts</option></select>
+<select id="filter-strategy" style="flex:1;min-width:120px"><option value="">All Strategies</option></select>
+<select id="filter-result" style="flex:1;min-width:120px"><option value="">All Results</option><option value="win">Wins Only</option><option value="loss">Losses Only</option></select>
+</div>
+<div style="overflow-x:auto">
+<table class="trade-table" id="trade-table">
+<thead><tr>
+<th>Date</th><th>Contract</th><th>Dir</th><th>Entry</th><th>Exit</th>
+<th>Qty</th><th>P&L $</th><th>P&L Pts</th><th>R:R</th><th>R-Mult</th>
+<th>Strategy</th><th>Rating</th><th>Coach</th><th>Actions</th>
+</tr></thead>
+<tbody id="trade-tbody"></tbody>
+</table>
+</div>
+</section>
+<section id="statistics" class="section-hidden">
+<h2>Statistics</h2>
+<div class="stats-grid" id="stats-grid"></div>
+</section>
+<section id="charts" class="section-hidden">
+<h2>Performance Charts</h2>
+<div class="chart-grid">
+<div class="chart-container"><h3>Equity Curve</h3><canvas id="chart-equity"></canvas></div>
+<div class="chart-container"><h3>Daily P&L</h3><canvas id="chart-daily"></canvas></div>
+<div class="chart-container"><h3>Weekly Performance</h3><canvas id="chart-weekly"></canvas></div>
+<div class="chart-container"><h3>Win/Loss Distribution</h3><canvas id="chart-winloss"></canvas></div>
+<div class="chart-container" style="grid-column:1/-1"><h3>Strategy Performance</h3><canvas id="chart-strategy"></canvas></div>
+</div>
+</section>
+<section id="review" class="section-hidden">
+<h2>Trade Review</h2>
+<div id="review-cards"></div>
+</section>
+<section id="coach-history" class="section-hidden">
+<h2>🤖 Coach History</h2>
+<div id="coach-history-list"></div>
+</section>
+</main>
+</div>
+
+<!-- Modals -->
+<div id="edit-modal" class="modal-overlay">
+<div class="modal"><div class="modal-header"><h3>Edit Trade</h3><button class="modal-close">&times;</button></div>
+<form id="edit-form" class="form-grid">
+<div class="form-group"><label>Date</label><input type="date" id="edit-date" required></div>
+<div class="form-group"><label>Contract</label>
+<select id="edit-contract" required>
+<option value="MES">MES</option><option value="MNQ">MNQ</option><option value="MCL">MCL</option>
+<option value="MGC">MGC</option><option value="ES">ES</option><option value="NQ">NQ</option>
+<option value="CL">CL</option><option value="GC">GC</option><option value="custom">Custom</option>
+</select></div>
+<div class="form-group"><label>Direction</label>
+<select id="edit-direction" required><option value="long">Long</option><option value="short">Short</option></select></div>
+<div class="form-group"><label>Entry Price</label><input type="number" id="edit-entry" step="0.01" required></div>
+<div class="form-group"><label>Exit Price</label><input type="number" id="edit-exit" step="0.01" required></div>
+<div class="form-group"><label>Contracts</label><input type="number" id="edit-contracts" min="1" step="1" required></div>
+<div class="form-group"><label>Point Value</label><input type="number" id="edit-point-value" step="0.01"></div>
+<div class="form-group"><label>Stop Loss</label><input type="number" id="edit-sl" step="0.01"></div>
+<div class="form-group"><label>Take Profit</label><input type="number" id="edit-tp" step="0.01"></div>
+<div class="form-group"><label>Strategy</label><input type="text" id="edit-strategy"></div>
+<div class="form-group form-row"><label>Notes</label><textarea id="edit-notes"></textarea></div>
+<button type="submit" class="btn-primary">Update Trade</button>
+</form></div></div>
+
+<div id="import-modal" class="modal-overlay">
+<div class="modal modal-wide"><div class="modal-header"><h3>Import Trade from Screenshot</h3><button class="modal-close">&times;</button></div>
+<div class="screenshot-layout">
+<div class="screenshot-preview" id="screenshot-preview"><p style="color:var(--text-secondary);text-align:center;padding:40px">Screenshot will appear here</p></div>
+<form id="screenshot-form" class="screenshot-form">
+<div class="form-group"><label>Date</label><input type="date" id="screenshot-date" required></div>
+<div class="form-group"><label>Contract</label>
+<select id="screenshot-contract" required>
+<option value="MES">MES</option><option value="MNQ">MNQ</option><option value="MCL">MCL</option>
+<option value="MGC">MGC</option><option value="ES">ES</option><option value="NQ">NQ</option>
+<option value="CL">CL</option><option value="GC">GC</option>
+</select></div>
+<div class="form-group"><label>Direction</label>
+<select id="screenshot-direction" required><option value="long">Long</option><option value="short">Short</option></select></div>
+<div class="form-group"><label>Entry Price</label><input type="number" id="screenshot-entry" step="0.01" required></div>
+<div class="form-group"><label>Exit Price</label><input type="number" id="screenshot-exit" step="0.01" required></div>
+<div class="form-group"><label>Contracts</label><input type="number" id="screenshot-contracts" min="1" step="1" value="1" required></div>
+<div class="form-group"><label>Stop Loss</label><input type="number" id="screenshot-sl" step="0.01"></div>
+<div class="form-group"><label>Take Profit</label><input type="number" id="screenshot-tp" step="0.01"></div>
+<div class="form-group"><label>Strategy</label><input type="text" id="screenshot-strategy"></div>
+<textarea id="screenshot-notes" placeholder="Notes..."></textarea>
+<button type="submit" class="btn-primary" style="grid-column:1/-1">Add Trade</button>
+</form></div>
+<div id="vision-status" style="margin-top:12px;font-size:13px;color:var(--text-secondary)"></div>
+</div></div>
+
+<div id="settings-modal" class="modal-overlay">
+<div class="modal"><div class="modal-header"><h3>⚙️ Settings</h3><button class="modal-close">&times;</button></div>
+<div class="settings-form">
+<div class="form-group">
+<label>Anthropic API Key</label>
+<input type="password" id="settings-api-key" class="api-key-input" placeholder="sk-ant-...">
+<small style="color:var(--text-secondary);margin-top:6px;display:block">Required for AI Coach feedback and screenshot auto-fill. Stored locally in your browser only.</small>
+</div>
+<div class="form-group">
+<label>Auto-analyze trades with AI Coach</label>
+<select id="settings-auto-coach">
+<option value="yes">Yes — analyze every trade automatically</option>
+<option value="no">No — I will request feedback manually</option>
+</select>
+</div>
+<button class="btn-primary" id="save-settings-btn" style="grid-column:unset">Save Settings</button>
+</div></div></div>
+
+<div id="coach-detail-modal" class="modal-overlay">
+<div class="modal"><div class="modal-header"><h3>🤖 Coach Feedback</h3><button class="modal-close">&times;</button></div>
+<div id="coach-detail-content"></div>
+</div></div>
+
+<div id="toast"></div>
+<input type="file" id="csv-file-input" accept="image/*" style="display:none">
+<script>
+
+const CONTRACTS = {
+    MES:{pointValue:5,tickSize:.25,label:'Micro E-mini S&P 500'},
+    MNQ:{pointValue:2,tickSize:.25,label:'Micro E-mini Nasdaq'},
+    MCL:{pointValue:100,tickSize:.01,label:'Micro WTI Crude Oil'},
+    MGC:{pointValue:10,tickSize:.10,label:'Micro Gold'},
+    ES:{pointValue:50,tickSize:.25,label:'E-mini S&P 500'},
+    NQ:{pointValue:20,tickSize:.25,label:'E-mini Nasdaq-100'},
+    CL:{pointValue:1000,tickSize:.01,label:'WTI Crude Oil'},
+    GC:{pointValue:100,tickSize:.10,label:'Gold'}
+};
+
+const Settings = {
+    load(){return{apiKey:localStorage.getItem('tjd_api_key')||'',autoCoach:localStorage.getItem('tjd_auto_coach')||'yes'}},
+    save(s){localStorage.setItem('tjd_api_key',s.apiKey);localStorage.setItem('tjd_auto_coach',s.autoCoach)},
+    getApiKey(){return localStorage.getItem('tjd_api_key')||''}
+};
+
+const Storage = {
+    key:'tjd_trades',
+    load(){const d=localStorage.getItem(this.key);return d?JSON.parse(d):[]},
+    save(t){localStorage.setItem(this.key,JSON.stringify(t))},
+    clear(){localStorage.removeItem(this.key)},
+    saveCoachFeedback(tradeId,fb){
+        const key='tjd_coach_'+tradeId;
+        localStorage.setItem(key,JSON.stringify(fb));
+    },
+    loadCoachFeedback(tradeId){
+        const d=localStorage.getItem('tjd_coach_'+tradeId);
+        return d?JSON.parse(d):null;
+    },
+    allCoachFeedbacks(){
+        const results=[];
+        for(let i=0;i<localStorage.length;i++){
+            const k=localStorage.key(i);
+            if(k&&k.startsWith('tjd_coach_')){
+                const tradeId=k.replace('tjd_coach_','');
+                const trades=Storage.load();
+                const trade=trades.find(t=>t.id===tradeId);
+                if(trade){results.push({trade,feedback:JSON.parse(localStorage.getItem(k))});}
+            }
+        }
+        return results.sort((a,b)=>new Date(b.trade.date)-new Date(a.trade.date));
+    }
+};
+
+const Calculator = {
+    compute(d){
+        const entry=parseFloat(d.entryPrice),exit=parseFloat(d.exitPrice),
+              dir=d.direction,contracts=parseInt(d.numContracts),pv=parseFloat(d.pointValue),
+              sl=d.stopLoss?parseFloat(d.stopLoss):null,tp=d.takeProfit?parseFloat(d.takeProfit):null;
+        const pnlPoints=dir==='long'?exit-entry:entry-exit;
+        const pnlDollar=pnlPoints*pv*contracts;
+        const pnlPercent=(pnlDollar/(entry*pv*contracts))*100;
+        const result=pnlDollar>0?'win':'loss';
+        let riskPoints=0,riskDollar=0,rrRatio=0;
+        if(sl){riskPoints=dir==='long'?entry-sl:sl-entry;riskDollar=riskPoints*pv*contracts;}
+        if(tp&&sl&&riskPoints){const rp=dir==='long'?tp-entry:entry-tp;rrRatio=rp/riskPoints;}
+        const rMultiple=riskPoints?pnlPoints/riskPoints:0;
+        return{
+            pnlDollar:parseFloat(pnlDollar.toFixed(2)),pnlPoints:parseFloat(pnlPoints.toFixed(2)),
+            pnlPercent:parseFloat(pnlPercent.toFixed(2)),riskDollar:parseFloat(riskDollar.toFixed(2)),
+            riskPoints:parseFloat(riskPoints.toFixed(2)),rrRatio:parseFloat(rrRatio.toFixed(2)),
+            rMultiple:parseFloat(rMultiple.toFixed(2)),result
+        };
+    }
+};
+
+const Rater = {
+    rate(t){
+        let s=0,r=0,e=0,d=0;
+        s+=t.takeProfit?3:0;s+=t.stopLoss?3:0;s+=t.notes?2:0;s+=t.rrRatio>=2?2:0;
+        r+=t.rrRatio>=3?3:0;r+=t.rrRatio>=2?2:0;r+=t.riskDollar<=500?3:1;
+        e+=t.rMultiple>=t.rrRatio?4:0;e+=t.rMultiple>=t.rrRatio*.5?2:0;e+=t.result==='win'?1:-2;
+        d+=t.notes?3:0;d+=t.strategy?3:0;d+=t.stopLoss?2:0;d+=t.takeProfit?2:0;
+        const rating=Math.max(1,Math.min(10,Math.round((s+r+e+d)/4)));
+        let fb='';
+        if(rating>=9)fb='Excellent execution with strong SMC setup';
+        else if(rating>=7)fb='Solid trade with good risk management';
+        else if(rating>=5)fb='Decent trade, some areas to improve';
+        else fb='Review your setup and risk discipline';
+        return{rating,feedback:fb};
+    }
+};
+
+const SampleData = {
+    generate(){
+        const now=new Date(),data=[],
+              strats=['Breakout','Order Block','Fair Value Gap','Liquidity Sweep','VWAP Reclaim'],
+              contracts=['MES','MNQ','MCL','MGC'];
+        for(let i=0;i<18;i++){
+            const contract=contracts[Math.floor(Math.random()*contracts.length)],
+                  ci=CONTRACTS[contract],
+                  date=new Date(now.getTime()-(Math.random()*21*864e5)),
+                  dateStr=date.toISOString().split('T')[0],
+                  direction=Math.random()>.5?'long':'short',
+                  numContracts=Math.floor(Math.random()*8)+1,
+                  strategy=strats[Math.floor(Math.random()*strats.length)];
+            const base=contract==='MES'?5100+Math.random()*100:
+                        contract==='MNQ'?17800+Math.random()*300:
+                        contract==='MCL'?83+Math.random()*5:2350+Math.random()*100;
+            const pips=(Math.random()-.5)*50,entry=parseFloat(base.toFixed(2)),
+                  exit=parseFloat((base+pips*ci.tickSize).toFixed(2)),
+                  sl=direction==='long'?entry-20*ci.tickSize:entry+20*ci.tickSize,
+                  tp=direction==='long'?entry+40*ci.tickSize:entry-40*ci.tickSize;
+            const trade={id:`${Date.now()}-${i}`,date:dateStr,contract,pointValue:ci.pointValue,
+                         numContracts,direction,entryPrice:entry,exitPrice:exit,
+                         stopLoss:parseFloat(sl.toFixed(2)),takeProfit:parseFloat(tp.toFixed(2)),
+                         strategy,notes:'Sample trade',importSource:'manual'};
+            const calc=Calculator.compute(trade);
+            Object.assign(trade,calc);
+            const rated=Rater.rate(trade);
+            trade.rating=rated.rating;trade.ratingFeedback=rated.feedback;
+            data.push(trade);
+        }
+        return data;
+    }
+};
+
+const Toast={
+    show(msg,type='success'){
+        const el=document.getElementById('toast');
+        el.textContent=msg;el.className=`show ${type}`;
+        setTimeout(()=>el.classList.remove('show'),3000);
+    }
+};
+
+const Navigation={
+    init(){document.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click',()=>this.showSection(b.dataset.section)));},
+    showSection(id){
+        document.querySelectorAll('section').forEach(s=>s.classList.add('section-hidden'));
+        document.getElementById(id).classList.remove('section-hidden');
+        document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+        document.querySelector(`[data-section="${id}"]`).classList.add('active');
+    }
+};
+
+const Coach = {
+    async analyze(trade, allTrades){
+        const apiKey=Settings.getApiKey();
+        if(!apiKey){return null;}
+        const recent=allTrades.slice(-10);
+        const winRate=recent.length?((recent.filter(t=>t.result==='win').length/recent.length)*100).toFixed(0):0;
+        const prompt=`You are a futures trading coach specializing in Smart Money Concepts (SMC) for micro futures traders.
+
+Analyze this trade:
+- Contract: ${trade.contract} (${CONTRACTS[trade.contract]?.label||trade.contract})
+- Direction: ${trade.direction.toUpperCase()}
+- Entry: ${trade.entryPrice} | Exit: ${trade.exitPrice}
+- Contracts: ${trade.numContracts} | Point Value: $${trade.pointValue}
+- P&L: ${trade.pnlDollar>0?'+':''}$${trade.pnlDollar} (${trade.pnlPoints} points)
+- Stop Loss: ${trade.stopLoss||'Not set'} | Take Profit: ${trade.takeProfit||'Not set'}
+- R:R Ratio: ${trade.rrRatio} | R-Multiple: ${trade.rMultiple}x
+- Strategy: ${trade.strategy||'Not specified'}
+- Notes: ${trade.notes||'None'}
+- Result: ${trade.result.toUpperCase()}
+
+Trader recent stats (last ${recent.length} trades): Win rate ${winRate}%, Avg P&L $${(recent.reduce((s,t)=>s+t.pnlDollar,0)/recent.length||0).toFixed(0)}
+
+Respond ONLY with valid JSON (no markdown):
+{"score":8,"strengths":["bullet1","bullet2","bullet3"],"weaknesses":["bullet1","bullet2"],"smcInsight":"one paragraph about SMC concepts like liquidity pools, order blocks, fair value gaps, breaker blocks","patternAlert":"one sentence about patterns or null"}
+
+Tone: 70% encouraging and supportive, 30% honest and blunt. Be specific about this exact trade.`;
+
+        try{
+            const res=await fetch('https://api.anthropic.com/v1/messages',{
+                method:'POST',
+                headers:{
+                    'Content-Type':'application/json',
+                    'x-api-key':apiKey,
+                    'anthropic-version':'2023-06-01',
+                    'anthropic-dangerous-direct-browser-access':'true'
+                },
+                body:JSON.stringify({
+                    model:'claude-sonnet-4-6',
+                    max_tokens:1000,
+                    messages:[{role:'user',content:prompt}]
+                })
+            });
+            if(!res.ok){const e=await res.json();throw new Error(e.error?.message||'API error');}
+            const data=await res.json();
+            const text=data.content[0].text.trim();
+            return JSON.parse(text);
+        }catch(e){
+            console.error('Coach error:',e);
+            return{score:0,error:e.message};
+        }
+    },
+
+    renderFeedback(fb, container){
+        if(fb.error){
+            container.innerHTML=`<div style="color:var(--accent-red);padding:12px">Coach error: ${fb.error}</div>`;
+            return;
+        }
+        const scoreColor=fb.score>=7?'var(--accent-green)':fb.score>=5?'var(--accent-yellow)':'var(--accent-red)';
+        container.innerHTML=`
+        <div class="coach-score">
+          <div class="coach-score-num" style="color:${scoreColor}">${fb.score}/10</div>
+          <div class="coach-score-label">SMC Alignment Score</div>
+        </div>
+        ${fb.strengths?.length?`<div class="coach-section">
+          <div class="coach-section-title good">✅ What You Did Well</div>
+          <ul class="coach-bullets">${fb.strengths.map(s=>`<li>${s}</li>`).join('')}</ul>
+        </div>`:''}
+        ${fb.weaknesses?.length?`<div class="coach-section">
+          <div class="coach-section-title improve">⚠️ Where To Improve</div>
+          <ul class="coach-bullets">${fb.weaknesses.map(w=>`<li>${w}</li>`).join('')}</ul>
+        </div>`:''}
+        ${fb.smcInsight?`<div class="coach-section">
+          <div class="coach-section-title smc">📊 SMC Insight</div>
+          <div class="coach-insight">${fb.smcInsight}</div>
+        </div>`:''}
+        ${fb.patternAlert&&fb.patternAlert!=='null'?`<div class="coach-section">
+          <div class="coach-section-title pattern">🔁 Pattern Alert</div>
+          <div class="coach-pattern">${fb.patternAlert}</div>
+        </div>`:''}`;
+    },
+
+    showSpinner(container){
+        container.innerHTML=`<div class="coach-spinner">
+          <div style="margin-bottom:12px;font-size:14px">🤖 Coach analyzing your trade...</div>
+          <span class="coach-spinner-dot"></span>
+          <span class="coach-spinner-dot"></span>
+          <span class="coach-spinner-dot"></span>
+        </div>`;
+    },
+
+    renderHistory(){
+        const list=document.getElementById('coach-history-list');
+        const all=Storage.allCoachFeedbacks();
+        if(!all.length){list.innerHTML='<p style="color:var(--text-secondary)">No coach feedback yet. Add trades to get AI coaching.</p>';return;}
+        list.innerHTML=all.map(({trade,feedback})=>`
+        <div class="coach-history-item" onclick="Coach.showDetailModal('${trade.id}')">
+          <div class="coach-history-date">${trade.date}</div>
+          <div class="coach-history-trade">${trade.contract} ${trade.direction.toUpperCase()} — ${trade.strategy||'No strategy'}</div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <div class="coach-history-score">${feedback.score}/10</div>
+            <div style="color:${trade.result==='win'?'var(--accent-green)':'var(--accent-red)'}">
+              ${trade.pnlDollar>0?'+':''}$${trade.pnlDollar.toFixed(2)}
+            </div>
+          </div>
+        </div>`).join('');
+    },
+
+    showDetailModal(tradeId){
+        const fb=Storage.loadCoachFeedback(tradeId);
+        if(!fb)return;
+        const modal=document.getElementById('coach-detail-modal');
+        const content=document.getElementById('coach-detail-content');
+        this.renderFeedback(fb,content);
+        modal.classList.add('active');
+    }
+};
+
+const Form={
+    init(){
+        document.getElementById('form-contract').addEventListener('change',e=>this.updatePointValue(e.target.value,'form-point-value'));
+        document.getElementById('form-date').valueAsDate=new Date();
+        document.getElementById('form-point-value').value=CONTRACTS['MES'].pointValue;
+        document.getElementById('trade-form').addEventListener('submit',e=>this.submit(e));
+        document.getElementById('edit-form').addEventListener('submit',e=>this.submitEdit(e));
+        document.getElementById('screenshot-form').addEventListener('submit',e=>this.submitScreenshot(e));
+        ['form-entry','form-exit','form-contracts','form-sl','form-tp'].forEach(id=>{
+            document.getElementById(id)?.addEventListener('input',()=>this.updatePreview());
+        });
+        document.getElementById('form-contract').addEventListener('change',()=>this.updatePreview());
+        document.getElementById('form-direction').addEventListener('change',()=>this.updatePreview());
+    },
+    updatePointValue(contract,targetId){
+        const t=document.getElementById(targetId);
+        if(CONTRACTS[contract]){t.value=CONTRACTS[contract].pointValue;t.readOnly=true;}
+        else{t.value='';t.readOnly=false;}
+    },
+    updatePreview(){
+        const preview=document.getElementById('form-preview');
+        const entry=parseFloat(document.getElementById('form-entry').value);
+        const exit=parseFloat(document.getElementById('form-exit').value);
+        const contracts=parseInt(document.getElementById('form-contracts').value)||1;
+        const contract=document.getElementById('form-contract').value;
+        const direction=document.getElementById('form-direction').value;
+        const pv=CONTRACTS[contract]?.pointValue||parseFloat(document.getElementById('form-point-value').value)||1;
+        if(!entry||!exit){preview.innerHTML='';return;}
+        const pnlPoints=direction==='long'?exit-entry:entry-exit;
+        const pnlDollar=pnlPoints*pv*contracts;
+        const sl=parseFloat(document.getElementById('form-sl').value);
+        const tp=parseFloat(document.getElementById('form-tp').value);
+        let rrText='—',rMultText='—';
+        if(sl&&tp){
+            const rp=direction==='long'?entry-sl:sl-entry;
+            const rewp=direction==='long'?tp-entry:entry-tp;
+            if(rp>0){rrText=(rewp/rp).toFixed(2)+':1';rMultText=(pnlPoints/rp).toFixed(2)+'x';}
+        }
+        preview.innerHTML=`
+        <div class="preview-item"><span class="preview-label">P&L $</span><span class="preview-value" style="color:${pnlDollar>=0?'var(--accent-green)':'var(--accent-red)'}">${pnlDollar>0?'+':''}$${pnlDollar.toFixed(2)}</span></div>
+        <div class="preview-item"><span class="preview-label">P&L Points</span><span class="preview-value">${pnlPoints.toFixed(2)}</span></div>
+        <div class="preview-item"><span class="preview-label">R:R Ratio</span><span class="preview-value">${rrText}</span></div>
+        <div class="preview-item"><span class="preview-label">R-Multiple</span><span class="preview-value">${rMultText}</span></div>`;
+    },
+    async submit(e){
+        e.preventDefault();
+        const fd={
+            date:document.getElementById('form-date').value,
+            contract:document.getElementById('form-contract').value,
+            numContracts:document.getElementById('form-contracts').value,
+            direction:document.getElementById('form-direction').value,
+            entryPrice:document.getElementById('form-entry').value,
+            exitPrice:document.getElementById('form-exit').value,
+            pointValue:document.getElementById('form-point-value').value||CONTRACTS[document.getElementById('form-contract').value]?.pointValue||0,
+            stopLoss:document.getElementById('form-sl').value,
+            takeProfit:document.getElementById('form-tp').value,
+            strategy:document.getElementById('form-strategy').value,
+            notes:document.getElementById('form-notes').value
+        };
+        if(!fd.date||!fd.entryPrice||!fd.exitPrice){Toast.show('Fill in required fields','error');return;}
+        const calc=Calculator.compute(fd);
+        const rated=Rater.rate({...fd,...calc});
+        const trade={...fd,id:`${Date.now()}-${Math.random().toString(36).substr(2,5)}`,...calc,rating:rated.rating,ratingFeedback:rated.feedback,importSource:'manual'};
+        let trades=Storage.load();trades.push(trade);Storage.save(trades);
+        Toast.show('Trade added!');
+        document.getElementById('trade-form').reset();
+        document.getElementById('form-date').valueAsDate=new Date();
+        document.getElementById('form-point-value').value=CONTRACTS['MES'].pointValue;
+        document.getElementById('form-preview').innerHTML='';
+        App.update();
+        const settings=Settings.load();
+        if(settings.autoCoach==='yes'&&Settings.getApiKey()){
+            const panel=document.getElementById('coach-panel');
+            const content=document.getElementById('coach-content');
+            panel.classList.add('visible');
+            Coach.showSpinner(content);
+            const fb=await Coach.analyze(trade,Storage.load());
+            if(fb){Coach.renderFeedback(fb,content);Storage.saveCoachFeedback(trade.id,fb);}
+        }
+    },
+    submitEdit(e){
+        e.preventDefault();
+        const trades=Storage.load();
+        const id=document.getElementById('edit-modal').dataset.tradeId;
+        const idx=trades.findIndex(t=>t.id===id);
+        if(idx===-1)return;
+        const fd={
+            date:document.getElementById('edit-date').value,
+            contract:document.getElementById('edit-contract').value,
+            numContracts:document.getElementById('edit-contracts').value,
+            direction:document.getElementById('edit-direction').value,
+            entryPrice:document.getElementById('edit-entry').value,
+            exitPrice:document.getElementById('edit-exit').value,
+            pointValue:document.getElementById('edit-point-value').value,
+            stopLoss:document.getElementById('edit-sl').value,
+            takeProfit:document.getElementById('edit-tp').value,
+            strategy:document.getElementById('edit-strategy').value,
+            notes:document.getElementById('edit-notes').value
+        };
+        const calc=Calculator.compute(fd);
+        const rated=Rater.rate({...fd,...calc});
+        trades[idx]={...trades[idx],...fd,...calc,rating:rated.rating,ratingFeedback:rated.feedback};
+        Storage.save(trades);Toast.show('Trade updated');
+        document.getElementById('edit-modal').classList.remove('active');
+        App.update();
+    },
+    async submitScreenshot(e){
+        e.preventDefault();
+        const fd={
+            date:document.getElementById('screenshot-date').value,
+            contract:document.getElementById('screenshot-contract').value,
+            numContracts:document.getElementById('screenshot-contracts').value,
+            direction:document.getElementById('screenshot-direction').value,
+            entryPrice:document.getElementById('screenshot-entry').value,
+            exitPrice:document.getElementById('screenshot-exit').value,
+            pointValue:CONTRACTS[document.getElementById('screenshot-contract').value]?.pointValue||0,
+            stopLoss:document.getElementById('screenshot-sl').value,
+            takeProfit:document.getElementById('screenshot-tp').value,
+            strategy:document.getElementById('screenshot-strategy').value,
+            notes:document.getElementById('screenshot-notes').value
+        };
+        if(!fd.date||!fd.entryPrice||!fd.exitPrice){Toast.show('Fill in required fields','error');return;}
+        const calc=Calculator.compute(fd);
+        const rated=Rater.rate({...fd,...calc});
+        const trade={...fd,id:`${Date.now()}-${Math.random().toString(36).substr(2,5)}`,...calc,rating:rated.rating,ratingFeedback:rated.feedback,importSource:'screenshot'};
+        let trades=Storage.load();trades.push(trade);Storage.save(trades);
+        Toast.show('Trade imported from screenshot!');
+        document.getElementById('import-modal').classList.remove('active');
+        document.getElementById('screenshot-form').reset();
+        document.getElementById('screenshot-preview').innerHTML='<p style="color:var(--text-secondary);text-align:center;padding:40px">Screenshot will appear here</p>';
+        App.update();
+        const settings=Settings.load();
+        if(settings.autoCoach==='yes'&&Settings.getApiKey()){
+            Navigation.showSection('trade-entry');
+            const panel=document.getElementById('coach-panel');
+            const content=document.getElementById('coach-content');
+            panel.classList.add('visible');
+            Coach.showSpinner(content);
+            const fb=await Coach.analyze(trade,Storage.load());
+            if(fb){Coach.renderFeedback(fb,content);Storage.saveCoachFeedback(trade.id,fb);}
+        }
+    }
+};
+
+const ScreenshotImport={
+    async handleFile(file){
+        const reader=new FileReader();
+        reader.onload=async(e)=>{
+            const dataUrl=e.target.result;
+            document.getElementById('screenshot-preview').innerHTML=`<img src="${dataUrl}" style="width:100%;border-radius:4px">`;
+            document.getElementById('screenshot-date').valueAsDate=new Date();
+            document.getElementById('import-modal').classList.add('active');
+            const apiKey=Settings.getApiKey();
+            if(apiKey){await this.autoFillFromVision(dataUrl,file.type);}
+        };
+        reader.readAsDataURL(file);
+    },
+    async autoFillFromVision(dataUrl,mimeType){
+        const status=document.getElementById('vision-status');
+        status.textContent='🤖 AI reading your screenshot...';
+        const base64=dataUrl.split(',')[1];
+        const mediaType=mimeType||'image/jpeg';
+        const prompt='Extract trade details from this trading screenshot. Return ONLY valid JSON with these fields (use null if not visible): {"contract":"MES","direction":"long","entryPrice":5100.25,"exitPrice":5115.50,"numContracts":2,"stopLoss":5090.00,"takeProfit":5130.00,"strategy":"breakout","notes":""}. For contract, match to: MES, MNQ, MCL, MGC, ES, NQ, CL, or GC.';
+        try{
+            const res=await fetch('https://api.anthropic.com/v1/messages',{
+                method:'POST',
+                headers:{'Content-Type':'application/json','x-api-key':Settings.getApiKey(),'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+                body:JSON.stringify({
+                    model:'claude-sonnet-4-6',max_tokens:300,
+                    messages:[{role:'user',content:[
+                        {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
+                        {type:'text',text:prompt}
+                    ]}]
+                })
+            });
+            if(!res.ok)throw new Error('Vision API failed');
+            const data=await res.json();
+            const text=data.content[0].text.trim();
+            const extracted=JSON.parse(text);
+            if(extracted.contract&&CONTRACTS[extracted.contract])document.getElementById('screenshot-contract').value=extracted.contract;
+            if(extracted.direction)document.getElementById('screenshot-direction').value=extracted.direction;
+            if(extracted.entryPrice)document.getElementById('screenshot-entry').value=extracted.entryPrice;
+            if(extracted.exitPrice)document.getElementById('screenshot-exit').value=extracted.exitPrice;
+            if(extracted.numContracts)document.getElementById('screenshot-contracts').value=extracted.numContracts;
+            if(extracted.stopLoss)document.getElementById('screenshot-sl').value=extracted.stopLoss;
+            if(extracted.takeProfit)document.getElementById('screenshot-tp').value=extracted.takeProfit;
+            if(extracted.strategy)document.getElementById('screenshot-strategy').value=extracted.strategy;
+            if(extracted.notes)document.getElementById('screenshot-notes').value=extracted.notes;
+            status.textContent='✅ AI auto-filled the form — please verify and adjust as needed.';
+            status.style.color='var(--accent-green)';
+        }catch(err){
+            status.textContent='ℹ️ Could not auto-fill — please enter details manually.';
+            status.style.color='var(--text-secondary)';
+        }
+    }
+};
+
+const Dashboard={
+    update(trades){
+        if(!trades.length){document.getElementById('stat-cards').innerHTML='<p style="color:var(--text-secondary)">No trades yet.</p>';return;}
+        const wins=trades.filter(t=>t.result==='win'),losses=trades.filter(t=>t.result==='loss');
+        const totalPnL=trades.reduce((s,t)=>s+t.pnlDollar,0);
+        const avgWin=wins.length?(wins.reduce((s,t)=>s+t.pnlDollar,0)/wins.length).toFixed(2):0;
+        const avgLoss=losses.length?(losses.reduce((s,t)=>s+t.pnlDollar,0)/losses.length).toFixed(2):0;
+        const pf=losses.length&&losses.reduce((s,t)=>s+t.pnlDollar,0)?Math.abs(wins.reduce((s,t)=>s+t.pnlDollar,0)/losses.reduce((s,t)=>s+t.pnlDollar,0)).toFixed(2):'—';
+        const avgR=(trades.reduce((s,t)=>s+t.rMultiple,0)/trades.length).toFixed(2);
+        let best=trades[0],worst=trades[0];
+        trades.forEach(t=>{if(t.pnlDollar>best.pnlDollar)best=t;if(t.pnlDollar<worst.pnlDollar)worst=t;});
+        let eq=0,maxEq=0,maxDD=0;
+        [...trades].sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(t=>{
+            eq+=t.pnlDollar;if(eq>maxEq)maxEq=eq;const dd=maxEq-eq;if(dd>maxDD)maxDD=dd;
+        });
+        const stats=[
+            {label:'Total Trades',value:trades.length},
+            {label:'Win Rate',value:`${((wins.length/trades.length)*100).toFixed(1)}%`},
+            {label:'Net P&L',value:`$${totalPnL.toFixed(2)}`,positive:totalPnL>=0},
+            {label:'Avg Win',value:`$${avgWin}`},
+            {label:'Avg Loss',value:`$${avgLoss}`},
+            {label:'Profit Factor',value:pf},
+            {label:'Avg R-Multiple',value:`${avgR}x`},
+            {label:'Best Trade',value:`$${best.pnlDollar.toFixed(2)}`},
+            {label:'Worst Trade',value:`$${worst.pnlDollar.toFixed(2)}`},
+            {label:'Max Drawdown',value:`$${maxDD.toFixed(2)}`}
+        ];
+        document.getElementById('stat-cards').innerHTML=stats.map(s=>`
+        <div class="stat-card">
+          <div class="stat-value" style="${s.positive!==undefined?`color:${s.positive?'var(--accent-green)':'var(--accent-red)'}`:''}">
+            ${s.value}
+          </div>
+          <div class="stat-label">${s.label}</div>
+        </div>`).join('');
+    }
+};
+
+const Table={
+    render(trades){
+        const tbody=document.getElementById('trade-tbody');
+        if(!trades.length){tbody.innerHTML='<tr><td colspan="14" style="text-align:center;color:var(--text-secondary);padding:40px">No trades found</td></tr>';return;}
+        tbody.innerHTML=[...trades].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(t=>{
+            const hasFb=Storage.loadCoachFeedback(t.id);
+            return`<tr>
+            <td>${t.date}</td>
+            <td>${t.contract}</td>
+            <td><span class="badge ${t.direction}">${t.direction.toUpperCase()}</span></td>
+            <td>${t.entryPrice}</td><td>${t.exitPrice}</td><td>${t.numContracts}</td>
+            <td style="color:${t.pnlDollar>=0?'var(--accent-green)':'var(--accent-red)'}">${t.pnlDollar>0?'+':''}$${t.pnlDollar.toFixed(2)}</td>
+            <td>${t.pnlPoints.toFixed(2)}</td>
+            <td>${t.rrRatio.toFixed(2)}</td>
+            <td>${t.rMultiple.toFixed(2)}</td>
+            <td>${t.strategy||'—'}</td>
+            <td><span class="badge ${t.result}">${t.rating}/10</span></td>
+            <td>${hasFb?`<button class="action-btn" onclick="Coach.showDetailModal('${t.id}')">🤖 View</button>`:'—'}</td>
+            <td>
+              <button class="action-btn" onclick="Table.edit('${t.id}')">Edit</button>
+              <button class="action-btn" onclick="Table.del('${t.id}')">Del</button>
+            </td></tr>`;
+        }).join('');
+    },
+    edit(id){
+        const trades=Storage.load(),t=trades.find(x=>x.id===id);
+        if(!t)return;
+        document.getElementById('edit-date').value=t.date;
+        document.getElementById('edit-contract').value=t.contract;
+        document.getElementById('edit-direction').value=t.direction;
+        document.getElementById('edit-entry').value=t.entryPrice;
+        document.getElementById('edit-exit').value=t.exitPrice;
+        document.getElementById('edit-contracts').value=t.numContracts;
+        document.getElementById('edit-point-value').value=t.pointValue;
+        document.getElementById('edit-sl').value=t.stopLoss||'';
+        document.getElementById('edit-tp').value=t.takeProfit||'';
+        document.getElementById('edit-strategy').value=t.strategy||'';
+        document.getElementById('edit-notes').value=t.notes||'';
+        document.getElementById('edit-modal').dataset.tradeId=id;
+        document.getElementById('edit-modal').classList.add('active');
+    },
+    del(id){
+        if(!confirm('Delete this trade?'))return;
+        let trades=Storage.load();
+        trades=trades.filter(t=>t.id!==id);
+        Storage.save(trades);Toast.show('Trade deleted');App.update();
+    }
+};
+
+const Charts={
+    instances:{},
+    opts:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#94a3b8',font:{size:12}}}},scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'#2a3050'}},y:{ticks:{color:'#94a3b8'},grid:{color:'#2a3050'}}}},
+    init(){
+        this.instances.equity=new Chart(document.getElementById('chart-equity'),{type:'line',data:{labels:[],datasets:[{label:'Equity',data:[],borderColor:'#00d4ff',backgroundColor:'rgba(0,212,255,.1)',tension:.4,fill:true}]},options:this.opts});
+        this.instances.daily=new Chart(document.getElementById('chart-daily'),{type:'bar',data:{labels:[],datasets:[{label:'Daily P&L',data:[],backgroundColor:[]}]},options:this.opts});
+        this.instances.weekly=new Chart(document.getElementById('chart-weekly'),{type:'bar',data:{labels:[],datasets:[{label:'Weekly P&L',data:[],backgroundColor:[]}]},options:this.opts});
+        this.instances.winloss=new Chart(document.getElementById('chart-winloss'),{type:'doughnut',data:{labels:['Wins','Losses'],datasets:[{data:[],backgroundColor:['#00ff88','#ff4d6d']}]},options:{...this.opts,plugins:{legend:{position:'bottom',labels:{color:'#94a3b8'}}}}});
+        this.instances.strategy=new Chart(document.getElementById('chart-strategy'),{type:'bar',data:{labels:[],datasets:[{label:'Strategy P&L',data:[],backgroundColor:'#00d4ff'}]},options:{...this.opts,indexAxis:'y'}});
+    },
+    updateAll(trades){
+        if(!trades.length)return;
+        const sorted=[...trades].sort((a,b)=>new Date(a.date)-new Date(b.date));
+        let eq=0;
+        this.instances.equity.data.labels=sorted.map(t=>t.date);
+        this.instances.equity.data.datasets[0].data=sorted.map(t=>{eq+=t.pnlDollar;return eq;});
+        this.instances.equity.update();
+        const daily={};sorted.forEach(t=>{daily[t.date]=(daily[t.date]||0)+t.pnlDollar;});
+        const dl=Object.keys(daily),dd=Object.values(daily);
+        this.instances.daily.data.labels=dl;
+        this.instances.daily.data.datasets[0].data=dd;
+        this.instances.daily.data.datasets[0].backgroundColor=dd.map(v=>v>=0?'#00ff88':'#ff4d6d');
+        this.instances.daily.update();
+        const weekly={};
+        sorted.forEach(t=>{const d=new Date(t.date),w=`W${Math.ceil(d.getDate()/7)} ${d.getMonth()+1}/${d.getFullYear()}`;weekly[w]=(weekly[w]||0)+t.pnlDollar;});
+        const wl=Object.keys(weekly),wd=Object.values(weekly);
+        this.instances.weekly.data.labels=wl;
+        this.instances.weekly.data.datasets[0].data=wd;
+        this.instances.weekly.data.datasets[0].backgroundColor=wd.map(v=>v>=0?'#00ff88':'#ff4d6d');
+        this.instances.weekly.update();
+        this.instances.winloss.data.datasets[0].data=[trades.filter(t=>t.result==='win').length,trades.filter(t=>t.result==='loss').length];
+        this.instances.winloss.update();
+        const strat={};trades.forEach(t=>{const s=t.strategy||'Unspecified';strat[s]=(strat[s]||0)+t.pnlDollar;});
+        const sl=Object.keys(strat).sort((a,b)=>strat[b]-strat[a]);
+        this.instances.strategy.data.labels=sl;
+        this.instances.strategy.data.datasets[0].data=sl.map(s=>strat[s]);
+        this.instances.strategy.update();
+    }
+};
+
+const App={
+    init(){
+        let trades=Storage.load();
+        if(!trades.length){trades=SampleData.generate();Storage.save(trades);}
+        Navigation.init();Form.init();Charts.init();
+        this.bindEvents();this.update();
+        const s=Settings.load();
+        if(s.apiKey){document.getElementById('settings-api-key').value=s.apiKey;}
+        document.getElementById('settings-auto-coach').value=s.autoCoach;
+    },
+    bindEvents(){
+        document.getElementById('import-btn').addEventListener('click',()=>document.getElementById('csv-file-input').click());
+        document.getElementById('csv-file-input').addEventListener('change',e=>{if(e.target.files[0])ScreenshotImport.handleFile(e.target.files[0]);});
+        document.getElementById('settings-btn').addEventListener('click',()=>{
+            document.getElementById('settings-modal').classList.add('active');
+        });
+        document.getElementById('save-settings-btn').addEventListener('click',()=>{
+            Settings.save({apiKey:document.getElementById('settings-api-key').value.trim(),autoCoach:document.getElementById('settings-auto-coach').value});
+            document.getElementById('settings-modal').classList.remove('active');
+            Toast.show('Settings saved!');
+        });
+        document.querySelectorAll('.modal-close').forEach(btn=>{
+            btn.addEventListener('click',e=>{e.target.closest('.modal-overlay').classList.remove('active');});
+        });
+        document.getElementById('filter-contract').addEventListener('change',()=>this.applyFilters());
+        document.getElementById('filter-strategy').addEventListener('change',()=>this.applyFilters());
+        document.getElementById('filter-result').addEventListener('change',()=>this.applyFilters());
+    },
+    update(){
+        const trades=Storage.load();
+        Dashboard.update(trades);
+        Table.render(trades);
+        Charts.updateAll(trades);
+        Coach.renderHistory();
+        this.updateStats(trades);
+        this.updateFilters(trades);
+    },
+    updateFilters(trades){
+        const cs=document.getElementById('filter-contract'),ss=document.getElementById('filter-strategy');
+        const cv=cs.value,sv=ss.value;
+        cs.innerHTML='<option value="">All Contracts</option>';
+        ss.innerHTML='<option value="">All Strategies</option>';
+        [...new Set(trades.map(t=>t.contract))].forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;cs.appendChild(o);});
+        [...new Set(trades.map(t=>t.strategy).filter(Boolean))].forEach(s=>{const o=document.createElement('option');o.value=s;o.textContent=s;ss.appendChild(o);});
+        cs.value=cv;ss.value=sv;
+    },
+    updateStats(trades){
+        if(!trades.length){document.getElementById('stats-grid').innerHTML='<p style="color:var(--text-secondary)">No data</p>';return;}
+        const wins=trades.filter(t=>t.result==='win');
+        const stats=[
+            {label:'Total Trades',value:trades.length},
+            {label:'Winning Trades',value:wins.length},
+            {label:'Losing Trades',value:trades.length-wins.length},
+            {label:'Win Rate',value:`${((wins.length/trades.length)*100).toFixed(1)}%`},
+            {label:'Total P&L',value:`$${trades.reduce((s,t)=>s+t.pnlDollar,0).toFixed(2)}`},
+            {label:'Avg P&L',value:`$${(trades.reduce((s,t)=>s+t.pnlDollar,0)/trades.length).toFixed(2)}`},
+            {label:'Best Trade',value:`$${Math.max(...trades.map(t=>t.pnlDollar)).toFixed(2)}`},
+            {label:'Worst Trade',value:`$${Math.min(...trades.map(t=>t.pnlDollar)).toFixed(2)}`},
+            {label:'Avg Rating',value:`${(trades.reduce((s,t)=>s+t.rating,0)/trades.length).toFixed(1)}/10`},
+            {label:'Coach Feedbacks',value:trades.filter(t=>Storage.loadCoachFeedback(t.id)).length}
+        ];
+        document.getElementById('stats-grid').innerHTML=stats.map(s=>`<div class="stat-card"><div class="stat-value">${s.value}</div><div class="stat-label">${s.label}</div></div>`).join('');
+    },
+    applyFilters(){
+        let trades=Storage.load();
+        const c=document.getElementById('filter-contract').value;
+        const s=document.getElementById('filter-strategy').value;
+        const r=document.getElementById('filter-result').value;
+        if(c)trades=trades.filter(t=>t.contract===c);
+        if(s)trades=trades.filter(t=>t.strategy===s);
+        if(r)trades=trades.filter(t=>t.result===r);
+        Table.render(trades);
+    }
+};
+
+App.init();
+</script>
+</body>
+</html>
