@@ -534,12 +534,41 @@ const FirebaseSync = {
             this.db=firebase.firestore();
             this._initialized=true;
             this._startListeners();
+            this._initialSync();
             this._updateStatusBadge();
             Toast.show('☁️ Cloud sync connected');
         }catch(e){
             console.error('FirebaseSync init error:',e);
             Toast.show('Sync config error — check Firebase settings','error');
         }
+    },
+    async _initialSync(){
+        for(const journal of ['live','paper']){
+            try{
+                const snap=await this._tradesDoc(journal).get();
+                const localRaw=localStorage.getItem('tjd_trades_'+journal)||'[]';
+                const localTrades=JSON.parse(localRaw);
+                if(snap.exists&&snap.data().trades?.length){
+                    const remote=snap.data().trades;
+                    if(JSON.stringify(remote)!==localRaw){
+                        // Firestore has data — merge: keep all unique trade IDs, Firestore wins on conflicts
+                        const remoteIds=new Set(remote.map(t=>t.id));
+                        const localOnly=localTrades.filter(t=>!remoteIds.has(t.id));
+                        const merged=[...remote,...localOnly].sort((a,b)=>new Date(a.date)-new Date(b.date));
+                        localStorage.setItem('tjd_trades_'+journal,JSON.stringify(merged));
+                        if(localOnly.length){
+                            this._ignoreNext=true;
+                            await this._tradesDoc(journal).set({trades:merged,updatedAt:Date.now()});
+                        }
+                    }
+                }else if(localTrades.length){
+                    // Firestore empty — push local data up so other devices can get it
+                    this._ignoreNext=true;
+                    await this._tradesDoc(journal).set({trades:localTrades,updatedAt:Date.now()});
+                }
+            }catch(e){console.warn('Initial sync failed for',journal,e);}
+        }
+        App.update();
     },
     _tradesDoc(journal){
         const{syncId}=this.getConfig();
@@ -1182,8 +1211,14 @@ const ScreenshotImport={
             status.textContent='✅ AI auto-filled the form — please verify and adjust as needed.';
             status.style.color='var(--accent-green)';
         }catch(err){
-            status.textContent='ℹ️ Could not auto-fill — please enter details manually.';
-            status.style.color='var(--text-secondary)';
+            const msg=err.message||'Unknown error';
+            const hint=msg.includes('401')||msg.includes('api_key')?'Invalid API key — check Settings.':
+                       msg.includes('400')?'Bad request — try a clearer screenshot.':
+                       msg.includes('Vision API failed')?'API error — check your Anthropic key in Settings.':
+                       'Could not read screenshot — enter details manually.';
+            status.textContent='⚠️ '+hint;
+            status.style.color='var(--accent-yellow)';
+            console.error('Vision error:',err);
         }
     }
 };
