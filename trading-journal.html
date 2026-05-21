@@ -1169,55 +1169,83 @@ const ScreenshotImport={
             document.getElementById('screenshot-preview').innerHTML=`<img src="${dataUrl}" style="width:100%;border-radius:4px">`;
             document.getElementById('screenshot-date').valueAsDate=new Date();
             document.getElementById('import-modal').classList.add('active');
+            const status=document.getElementById('vision-status');
             const apiKey=Settings.getApiKey();
-            if(apiKey){await this.autoFillFromVision(dataUrl,file.type);}
+            if(!apiKey){
+                status.textContent='⚠️ No API key — go to Settings and add your Anthropic API key to enable AI auto-fill.';
+                status.style.color='var(--accent-yellow)';
+                status.style.background='rgba(255,215,0,.08)';
+                status.style.padding='10px';
+                status.style.borderRadius='6px';
+                return;
+            }
+            status.style.background='';status.style.padding='';
+            // Resize + convert image to JPEG before sending (handles HEIC, large PNGs, etc.)
+            const compressed=await this._compressImage(dataUrl);
+            await this.autoFillFromVision(compressed,'image/jpeg');
         };
         reader.readAsDataURL(file);
     },
+    _compressImage(dataUrl){
+        return new Promise(resolve=>{
+            const img=new Image();
+            img.onload=()=>{
+                const MAX=1200;
+                let w=img.width,h=img.height;
+                if(w>MAX||h>MAX){const r=Math.min(MAX/w,MAX/h);w=Math.round(w*r);h=Math.round(h*r);}
+                const canvas=document.createElement('canvas');
+                canvas.width=w;canvas.height=h;
+                canvas.getContext('2d').drawImage(img,0,0,w,h);
+                resolve(canvas.toDataURL('image/jpeg',0.85));
+            };
+            img.onerror=()=>resolve(dataUrl); // fallback to original if canvas fails
+            img.src=dataUrl;
+        });
+    },
     async autoFillFromVision(dataUrl,mimeType){
         const status=document.getElementById('vision-status');
-        status.textContent='🤖 AI reading your screenshot...';
+        status.innerHTML='<span style="color:var(--accent-cyan)">🤖 AI is reading your screenshot...</span>';
         const base64=dataUrl.split(',')[1];
-        const mediaType=mimeType||'image/jpeg';
-        const prompt='Extract trade details from this trading screenshot. Return ONLY valid JSON with these fields (use null if not visible): {"contract":"MES","direction":"long","entryPrice":5100.25,"exitPrice":5115.50,"numContracts":2,"stopLoss":5090.00,"takeProfit":5130.00,"strategy":"breakout","notes":"","accountBalance":50000.00}. For contract, match to: MES, MNQ, MCL, MGC, ES, NQ, CL, or GC. For accountBalance, look for any visible account balance, total equity, or net liquidation value.';
+        const prompt='Extract trade details from this trading screenshot. Return ONLY valid JSON (no markdown) with these fields (use null if not visible): {"contract":"MES","direction":"long","entryPrice":5100.25,"exitPrice":5115.50,"numContracts":2,"stopLoss":5090.00,"takeProfit":5130.00,"strategy":"breakout","notes":"","accountBalance":50000.00}. Contract must be one of: MES, MNQ, MCL, MGC, ES, NQ, CL, GC. For accountBalance, look for any visible account balance, total equity, or net liquidation value. Be precise with prices.';
         try{
             const res=await fetch('https://api.anthropic.com/v1/messages',{
                 method:'POST',
                 headers:{'Content-Type':'application/json','x-api-key':Settings.getApiKey(),'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
                 body:JSON.stringify({
-                    model:'claude-sonnet-4-6',max_tokens:300,
+                    model:'claude-sonnet-4-6',max_tokens:400,
                     messages:[{role:'user',content:[
-                        {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
+                        {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},
                         {type:'text',text:prompt}
                     ]}]
                 })
             });
-            if(!res.ok)throw new Error('Vision API failed');
+            if(!res.ok){
+                const err=await res.json().catch(()=>({}));
+                throw new Error(err.error?.message||`API error ${res.status}`);
+            }
             const data=await res.json();
             const text=data.content[0].text.trim();
             const jsonMatch=text.match(/\{[\s\S]*\}/);
             if(!jsonMatch)throw new Error('No JSON in response');
-            const extracted=JSON.parse(jsonMatch[0]);
-            if(extracted.contract&&CONTRACTS[extracted.contract])document.getElementById('screenshot-contract').value=extracted.contract;
-            if(extracted.direction)document.getElementById('screenshot-direction').value=extracted.direction;
-            if(extracted.entryPrice)document.getElementById('screenshot-entry').value=extracted.entryPrice;
-            if(extracted.exitPrice)document.getElementById('screenshot-exit').value=extracted.exitPrice;
-            if(extracted.numContracts)document.getElementById('screenshot-contracts').value=extracted.numContracts;
-            if(extracted.stopLoss)document.getElementById('screenshot-sl').value=extracted.stopLoss;
-            if(extracted.takeProfit)document.getElementById('screenshot-tp').value=extracted.takeProfit;
-            if(extracted.strategy)document.getElementById('screenshot-strategy').value=extracted.strategy;
-            if(extracted.notes)document.getElementById('screenshot-notes').value=extracted.notes;
-            if(extracted.accountBalance)document.getElementById('screenshot-balance-after').value=extracted.accountBalance;
-            status.textContent='✅ AI auto-filled the form — please verify and adjust as needed.';
-            status.style.color='var(--accent-green)';
+            const x=JSON.parse(jsonMatch[0]);
+            if(x.contract&&CONTRACTS[x.contract])document.getElementById('screenshot-contract').value=x.contract;
+            if(x.direction)document.getElementById('screenshot-direction').value=x.direction;
+            if(x.entryPrice)document.getElementById('screenshot-entry').value=x.entryPrice;
+            if(x.exitPrice)document.getElementById('screenshot-exit').value=x.exitPrice;
+            if(x.numContracts)document.getElementById('screenshot-contracts').value=x.numContracts;
+            if(x.stopLoss)document.getElementById('screenshot-sl').value=x.stopLoss;
+            if(x.takeProfit)document.getElementById('screenshot-tp').value=x.takeProfit;
+            if(x.strategy)document.getElementById('screenshot-strategy').value=x.strategy;
+            if(x.notes)document.getElementById('screenshot-notes').value=x.notes;
+            if(x.accountBalance)document.getElementById('screenshot-balance-after').value=x.accountBalance;
+            status.innerHTML='<span style="color:var(--accent-green)">✅ Auto-filled from screenshot — verify the values then click Add Trade.</span>';
         }catch(err){
-            const msg=err.message||'Unknown error';
-            const hint=msg.includes('401')||msg.includes('api_key')?'Invalid API key — check Settings.':
-                       msg.includes('400')?'Bad request — try a clearer screenshot.':
-                       msg.includes('Vision API failed')?'API error — check your Anthropic key in Settings.':
-                       'Could not read screenshot — enter details manually.';
-            status.textContent='⚠️ '+hint;
-            status.style.color='var(--accent-yellow)';
+            const msg=err.message||'';
+            const hint=msg.includes('401')||msg.includes('authentication')?'Invalid API key — check Settings ⚙️':
+                       msg.includes('400')?'Bad image format — try a clearer PNG or JPEG screenshot.':
+                       msg.includes('No JSON')?'AI response unclear — try a cleaner screenshot.':
+                       'Could not read screenshot ('+msg+'). Enter details manually.';
+            status.innerHTML=`<span style="color:var(--accent-red)">⚠️ ${hint}</span>`;
             console.error('Vision error:',err);
         }
     }
