@@ -120,7 +120,7 @@ canvas{max-height:300px}
 /* Settings */
 .settings-form{display:flex;flex-direction:column;gap:16px}
 .api-key-input{font-family:monospace;letter-spacing:1px}
-.theme-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:4px}
+.theme-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:4px}
 .theme-swatch{border:2px solid var(--border);border-radius:8px;padding:12px;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:10px}
 .theme-swatch:hover{border-color:var(--accent-cyan);transform:translateY(-1px)}
 .theme-swatch.selected{border-color:var(--accent-cyan);box-shadow:0 0 0 1px var(--accent-cyan)}
@@ -166,6 +166,15 @@ canvas{max-height:300px}
 @media(max-width:768px){#sidebar{width:100%;height:auto;position:static;border-right:none;border-bottom:1px solid var(--border)}#main-content{margin-left:0;padding:12px}.stat-cards{grid-template-columns:1fr 1fr}}
 #daily-limit-banner{display:none;background:rgba(255,77,109,.15);border-bottom:3px solid var(--accent-red);padding:12px 24px;color:var(--accent-red);font-weight:600;font-size:14px;position:sticky;top:0;z-index:50;align-items:center;justify-content:space-between}
 #daily-limit-banner.active{display:flex}
+.coach-section-title.ib{color:#f59e0b}
+/* Tradezella theme scoped overrides */
+body.theme-tradezella .nav-btn{border-radius:8px;margin:2px 8px;width:calc(100% - 16px)}
+body.theme-tradezella .nav-btn.active{background:rgba(139,92,246,.18);color:#8b5cf6;border-left:none;padding-left:20px}
+body.theme-tradezella .stat-card{background:linear-gradient(135deg,rgba(26,28,40,1) 0%,rgba(30,32,50,1) 100%);border:1px solid rgba(139,92,246,.2);box-shadow:0 4px 24px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.04)}
+body.theme-tradezella .stat-card:hover{border-color:rgba(139,92,246,.5);box-shadow:0 8px 32px rgba(139,92,246,.15);transform:translateY(-2px)}
+body.theme-tradezella .stat-value{font-size:26px}
+body.theme-tradezella .sidebar-logo{background:linear-gradient(135deg,#8b5cf6,#10b981);background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+body.theme-tradezella .coach-panel{border-color:#8b5cf6;background:linear-gradient(135deg,#0f0f20,#1a1a35)}
 </style>
 </head>
 <body>
@@ -246,6 +255,9 @@ canvas{max-height:300px}
 <option value="Fair Value Gap">Fair Value Gap</option>
 <option value="Liquidity Sweep">Liquidity Sweep</option>
 <option value="Breaker Block">Breaker Block</option>
+<option value="Inside Bar">Inside Bar</option>
+<option value="IB Breakout">IB Breakout</option>
+<option value="IB Reversal">IB Reversal</option>
 <option value="Custom">Custom</option>
 </select></div>
 <div class="form-group form-row"><label>Notes</label><textarea id="form-notes" placeholder="Trade setup notes, SMC confluences, observations..."></textarea></div>
@@ -450,6 +462,10 @@ canvas{max-height:300px}
 <div class="theme-swatch" data-theme="carbon" onclick="Themes.apply('carbon')">
   <div class="theme-dots"><div class="theme-dot" style="background:#111111;border:1px solid #444"></div><div class="theme-dot" style="background:#f59e0b"></div><div class="theme-dot" style="background:#fb923c"></div></div>
   <span class="theme-name">Carbon</span>
+</div>
+<div class="theme-swatch" data-theme="tradezella" onclick="Themes.apply('tradezella')">
+  <div class="theme-dots"><div class="theme-dot" style="background:#0d0f18;border:1px solid #444"></div><div class="theme-dot" style="background:#8b5cf6"></div><div class="theme-dot" style="background:#10b981"></div></div>
+  <span class="theme-name">Tradezella</span>
 </div>
 </div>
 </div>
@@ -897,7 +913,13 @@ const Coach = {
         if(!apiKey){return null;}
         const recent=allTrades.slice(-10);
         const winRate=recent.length?((recent.filter(t=>t.result==='win').length/recent.length)*100).toFixed(0):0;
-        const prompt=`You are a futures trading coach specializing in Smart Money Concepts (SMC) for micro futures traders.
+        const avgPnl=(recent.reduce((s,t)=>s+t.pnlDollar,0)/recent.length||0).toFixed(0);
+        const prompt=`You are a futures trading coach specializing in Inside Bar (IB) patterns and Initial Balance Breakout setups for micro futures traders.
+
+STRATEGY CONTEXT:
+- Inside Bar (IB): A bar whose HIGH and LOW are completely contained within the previous bar's (Mother Bar's) range. Trade the breakout of the IB in the direction of the trend.
+- Initial Balance Breakout (IBB): The Initial Balance is the price range formed in the FIRST HOUR of the RTH session (9:30-10:30 AM ET for NQ/ES). A breakout above/below this range is a high-probability trade.
+- Asia Session Gold: MGC/GC trades taken 6:00 PM - 4:00 AM ET benefit from different institutional flows. Gold often sweeps Asian highs/lows before the London open.
 
 Analyze this trade:
 - Contract: ${trade.contract} (${CONTRACTS[trade.contract]?.label||trade.contract})
@@ -910,13 +932,23 @@ Analyze this trade:
 - Strategy: ${trade.strategy||'Not specified'}
 - Notes: ${trade.notes||'None'}
 - Result: ${trade.result.toUpperCase()}
+Recent form (last ${recent.length} trades): Win rate ${winRate}%, Avg P&L $${avgPnl}
 
-Trader recent stats (last ${recent.length} trades): Win rate ${winRate}%, Avg P&L $${(recent.reduce((s,t)=>s+t.pnlDollar,0)/recent.length||0).toFixed(0)}
+IB/IBB COACHING FOCUS:
+If strategy contains "Inside Bar" or notes mention IB -> evaluate: Was there a clearly defined Mother Bar? Did the IB form inside the Mother Bar's high/low? Was entry triggered on a breakout of the IB high (long) or IB low (short)? Was stop loss placed at or beyond the Mother Bar's opposite extreme? Was the IB aligned with the higher timeframe trend?
+
+If strategy contains "IB Breakout" or notes mention IBB/Initial Balance -> evaluate: Was the Initial Balance range (first hour 9:30-10:30 ET) clearly identified? Was entry taken on a clean break and close ABOVE the IB high (long) or BELOW the IB low (short)? Was there a retest of the IB level before entry, or a direct breakout? Was the target set at the IB range extension (1x or 2x IB range projected)?
+
+If contract is MGC or GC -> add Asia session context: Was this trade during Asia session (6 PM - 4 AM ET)? Gold often sweeps Asian lows/highs before the London open. Did the trade align with this flow?
+
+If none of the above apply, provide general execution and risk management feedback.
 
 Respond ONLY with valid JSON (no markdown):
-{"score":8,"strengths":["bullet1","bullet2","bullet3"],"weaknesses":["bullet1","bullet2"],"smcInsight":"one paragraph about SMC concepts like liquidity pools, order blocks, fair value gaps, breaker blocks","patternAlert":"one sentence about patterns or null"}
+{"score":8,"setupType":"inside_bar","strengths":["bullet1","bullet2","bullet3"],"weaknesses":["bullet1","bullet2"],"ibAnalysis":"2-3 sentences specifically about the IB/IBB setup quality — mother bar, entry trigger, stop placement, target. Be direct and specific.","patternAlert":"one sentence about patterns across recent trades or null"}
 
-Tone: 70% encouraging and supportive, 30% honest and blunt. Be specific about this exact trade.`;
+setupType must be one of: "inside_bar", "ib_breakout", "gold_asia", "mixed", "other"
+
+Tone: 70% encouraging, 30% honest and blunt. Be specific to THIS trade and THIS setup type.`;
 
         try{
             const res=await fetch('https://api.anthropic.com/v1/messages',{
@@ -949,11 +981,16 @@ Tone: 70% encouraging and supportive, 30% honest and blunt. Be specific about th
             return;
         }
         const scoreColor=fb.score>=7?'var(--accent-green)':fb.score>=5?'var(--accent-yellow)':'var(--accent-red)';
+        const setupLabel={'inside_bar':'Inside Bar','ib_breakout':'IB Breakout','gold_asia':'Gold/Asia Session','mixed':'Mixed Setup','other':'Setup'}[fb.setupType]||'Setup';
         container.innerHTML=`
         <div class="coach-score">
           <div class="coach-score-num" style="color:${scoreColor}">${fb.score}/10</div>
-          <div class="coach-score-label">SMC Alignment Score</div>
+          <div class="coach-score-label">${setupLabel} Score</div>
         </div>
+        ${fb.ibAnalysis?`<div class="coach-section">
+          <div class="coach-section-title ib">📐 IB/IBB Analysis</div>
+          <div class="coach-insight" style="border-left-color:#f59e0b">${fb.ibAnalysis}</div>
+        </div>`:''}
         ${fb.strengths?.length?`<div class="coach-section">
           <div class="coach-section-title good">✅ What You Did Well</div>
           <ul class="coach-bullets">${fb.strengths.map(s=>`<li>${s}</li>`).join('')}</ul>
@@ -1544,19 +1581,26 @@ const Themes = {
             '--bg-primary':'#111111','--bg-secondary':'#1a1a1a','--bg-card':'#222222','--bg-card-hover':'#2a2a2a',
             '--border':'#333333','--accent-cyan':'#f59e0b','--accent-green':'#34d399','--accent-red':'#f87171',
             '--accent-yellow':'#fb923c','--text-primary':'#e5e5e5','--text-secondary':'#a3a3a3','--text-muted':'#525252'
+        },
+        tradezella:{
+            '--bg-primary':'#0d0f18','--bg-secondary':'#13151f','--bg-card':'#1a1c28','--bg-card-hover':'#20223200',
+            '--border':'#2e3148','--accent-cyan':'#8b5cf6','--accent-green':'#10b981','--accent-red':'#f43f5e',
+            '--accent-yellow':'#f59e0b','--text-primary':'#f1f5f9','--text-secondary':'#94a3b8','--text-muted':'#475569'
         }
     },
     apply(name){
         const t=this.themes[name];if(!t)return;
         const root=document.documentElement;
         Object.entries(t).forEach(([k,v])=>root.style.setProperty(k,v));
+        document.body.className=document.body.className.replace(/theme-\w+/g,'').trim();
+        document.body.classList.add('theme-'+name);
         localStorage.setItem('tjd_theme',name);
         document.querySelectorAll('.theme-swatch').forEach(s=>{
             s.classList.toggle('selected',s.dataset.theme===name);
         });
     },
     init(){
-        const saved=localStorage.getItem('tjd_theme')||'ocean';
+        const saved=localStorage.getItem('tjd_theme')||'tradezella';
         this.apply(saved);
     }
 };
