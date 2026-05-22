@@ -951,7 +951,7 @@ setupType must be one of: "inside_bar", "ib_breakout", "gold_asia", "mixed", "ot
 Tone: 70% encouraging, 30% honest and blunt. Be specific to THIS trade and THIS setup type.`;
 
         this._lastTrade=trade;this._lastAllTrades=allTrades;
-        const reqBody=JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,messages:[{role:'user',content:prompt}]});
+        const reqBody=JSON.stringify({model:'claude-opus-4-7',max_tokens:1000,messages:[{role:'user',content:prompt}]});
         const reqHeaders={'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'};
         let lastErr;
         for(let attempt=0;attempt<3;attempt++){
@@ -1258,7 +1258,7 @@ const ScreenshotImport={
                 method:'POST',
                 headers:{'Content-Type':'application/json','x-api-key':Settings.getApiKey(),'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
                 body:JSON.stringify({
-                    model:'claude-sonnet-4-6',max_tokens:400,
+                    model:'claude-opus-4-7',max_tokens:400,
                     messages:[{role:'user',content:[
                         {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},
                         {type:'text',text:prompt}
