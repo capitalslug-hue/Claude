@@ -120,7 +120,7 @@ canvas{max-height:300px}
 /* Settings */
 .settings-form{display:flex;flex-direction:column;gap:16px}
 .api-key-input{font-family:monospace;letter-spacing:1px}
-.theme-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:4px}
+.theme-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:4px}
 .theme-swatch{border:2px solid var(--border);border-radius:8px;padding:12px;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:10px}
 .theme-swatch:hover{border-color:var(--accent-cyan);transform:translateY(-1px)}
 .theme-swatch.selected{border-color:var(--accent-cyan);box-shadow:0 0 0 1px var(--accent-cyan)}
@@ -166,6 +166,15 @@ canvas{max-height:300px}
 @media(max-width:768px){#sidebar{width:100%;height:auto;position:static;border-right:none;border-bottom:1px solid var(--border)}#main-content{margin-left:0;padding:12px}.stat-cards{grid-template-columns:1fr 1fr}}
 #daily-limit-banner{display:none;background:rgba(255,77,109,.15);border-bottom:3px solid var(--accent-red);padding:12px 24px;color:var(--accent-red);font-weight:600;font-size:14px;position:sticky;top:0;z-index:50;align-items:center;justify-content:space-between}
 #daily-limit-banner.active{display:flex}
+.coach-section-title.ib{color:#f59e0b}
+/* Tradezella theme scoped overrides */
+body.theme-tradezella .nav-btn{border-radius:8px;margin:2px 8px;width:calc(100% - 16px)}
+body.theme-tradezella .nav-btn.active{background:rgba(139,92,246,.18);color:#8b5cf6;border-left:none;padding-left:20px}
+body.theme-tradezella .stat-card{background:linear-gradient(135deg,rgba(26,28,40,1) 0%,rgba(30,32,50,1) 100%);border:1px solid rgba(139,92,246,.2);box-shadow:0 4px 24px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.04)}
+body.theme-tradezella .stat-card:hover{border-color:rgba(139,92,246,.5);box-shadow:0 8px 32px rgba(139,92,246,.15);transform:translateY(-2px)}
+body.theme-tradezella .stat-value{font-size:26px}
+body.theme-tradezella .sidebar-logo{background:linear-gradient(135deg,#8b5cf6,#10b981);background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+body.theme-tradezella .coach-panel{border-color:#8b5cf6;background:linear-gradient(135deg,#0f0f20,#1a1a35)}
 </style>
 </head>
 <body>
@@ -246,6 +255,9 @@ canvas{max-height:300px}
 <option value="Fair Value Gap">Fair Value Gap</option>
 <option value="Liquidity Sweep">Liquidity Sweep</option>
 <option value="Breaker Block">Breaker Block</option>
+<option value="Inside Bar">Inside Bar</option>
+<option value="IB Breakout">IB Breakout</option>
+<option value="IB Reversal">IB Reversal</option>
 <option value="Custom">Custom</option>
 </select></div>
 <div class="form-group form-row"><label>Notes</label><textarea id="form-notes" placeholder="Trade setup notes, SMC confluences, observations..."></textarea></div>
@@ -451,6 +463,34 @@ canvas{max-height:300px}
   <div class="theme-dots"><div class="theme-dot" style="background:#111111;border:1px solid #444"></div><div class="theme-dot" style="background:#f59e0b"></div><div class="theme-dot" style="background:#fb923c"></div></div>
   <span class="theme-name">Carbon</span>
 </div>
+<div class="theme-swatch" data-theme="tradezella" onclick="Themes.apply('tradezella')">
+  <div class="theme-dots"><div class="theme-dot" style="background:#0d0f18;border:1px solid #444"></div><div class="theme-dot" style="background:#8b5cf6"></div><div class="theme-dot" style="background:#10b981"></div></div>
+  <span class="theme-name">Tradezella</span>
+</div>
+</div>
+</div>
+<div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
+<div style="font-size:13px;font-weight:600;color:var(--accent-cyan);margin-bottom:12px">☁️ Cross-Device Sync (Firebase)</div>
+<div class="form-group">
+<label>Sync ID</label>
+<input type="text" id="settings-sync-id" placeholder="e.g. hawk-trader-9241" style="font-family:monospace;letter-spacing:1px">
+<small style="color:var(--text-secondary);margin-top:6px;display:block">Make up any unique phrase. Enter the same ID on every device. Keep it private — anyone with this ID and your Firebase config can read your trades.</small>
+</div>
+<div class="form-group">
+<label>Firebase API Key</label>
+<input type="password" id="settings-fb-api-key" class="api-key-input" placeholder="AIzaSy...">
+</div>
+<div class="form-group">
+<label>Firebase Project ID</label>
+<input type="text" id="settings-fb-project-id" placeholder="my-journal-12345" style="font-family:monospace">
+</div>
+<div class="form-group">
+<label>Firebase App ID</label>
+<input type="password" id="settings-fb-app-id" class="api-key-input" placeholder="1:123456789:web:abc123...">
+</div>
+<div id="sync-status-badge" style="font-size:12px;padding:8px;border-radius:4px;background:var(--bg-secondary);color:var(--text-secondary);margin-top:4px">Sync: Not configured</div>
+<div style="margin-top:10px;font-size:12px;color:var(--text-muted)">
+Setup: <a href="https://console.firebase.google.com" target="_blank" style="color:var(--accent-cyan);text-decoration:none">console.firebase.google.com</a> → New project → Add Web App → Enable Firestore (test mode) → paste the 3 values above.
 </div>
 </div>
 <button class="btn-primary" id="save-settings-btn" style="grid-column:unset">Save Settings</button>
@@ -468,6 +508,8 @@ canvas{max-height:300px}
 </div></div>
 <div id="toast"></div>
 <input type="file" id="csv-file-input" accept="image/*" style="display:none">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
 
 const CONTRACTS = {
@@ -479,6 +521,114 @@ const CONTRACTS = {
     NQ:{pointValue:20,tickSize:.25,label:'E-mini Nasdaq-100'},
     CL:{pointValue:1000,tickSize:.01,label:'WTI Crude Oil'},
     GC:{pointValue:100,tickSize:.10,label:'Gold'}
+};
+
+const FirebaseSync = {
+    db:null,
+    _unsubs:[],
+    _ignoreNext:false,
+    _initialized:false,
+    KEYS:{syncId:'tjd_sync_id',apiKey:'tjd_fb_api_key',projectId:'tjd_fb_project_id',appId:'tjd_fb_app_id'},
+    getConfig(){
+        return{
+            syncId:localStorage.getItem(this.KEYS.syncId)||'',
+            apiKey:localStorage.getItem(this.KEYS.apiKey)||'',
+            projectId:localStorage.getItem(this.KEYS.projectId)||'',
+            appId:localStorage.getItem(this.KEYS.appId)||''
+        };
+    },
+    saveConfig(cfg){Object.entries(cfg).forEach(([k,v])=>localStorage.setItem(this.KEYS[k],v||''));},
+    isConfigured(){const c=this.getConfig();return!!(c.syncId&&c.apiKey&&c.projectId&&c.appId);},
+    init(){
+        if(!this.isConfigured())return;
+        const cfg=this.getConfig();
+        try{
+            if(typeof firebase==='undefined')return;
+            if(!firebase.apps.length){
+                firebase.initializeApp({apiKey:cfg.apiKey,projectId:cfg.projectId,appId:cfg.appId});
+            }
+            this.db=firebase.firestore();
+            this._initialized=true;
+            this._startListeners();
+            this._initialSync();
+            this._updateStatusBadge();
+            Toast.show('☁️ Cloud sync connected');
+        }catch(e){
+            console.error('FirebaseSync init error:',e);
+            Toast.show('Sync config error — check Firebase settings','error');
+        }
+    },
+    async _initialSync(){
+        for(const journal of ['live','paper']){
+            try{
+                const snap=await this._tradesDoc(journal).get();
+                const localRaw=localStorage.getItem('tjd_trades_'+journal)||'[]';
+                const localTrades=JSON.parse(localRaw);
+                if(snap.exists&&snap.data().trades?.length){
+                    const remote=snap.data().trades;
+                    if(JSON.stringify(remote)!==localRaw){
+                        // Firestore has data — merge: keep all unique trade IDs, Firestore wins on conflicts
+                        const remoteIds=new Set(remote.map(t=>t.id));
+                        const localOnly=localTrades.filter(t=>!remoteIds.has(t.id));
+                        const merged=[...remote,...localOnly].sort((a,b)=>new Date(a.date)-new Date(b.date));
+                        localStorage.setItem('tjd_trades_'+journal,JSON.stringify(merged));
+                        if(localOnly.length){
+                            this._ignoreNext=true;
+                            await this._tradesDoc(journal).set({trades:merged,updatedAt:Date.now()});
+                        }
+                    }
+                }else if(localTrades.length){
+                    // Firestore empty — push local data up so other devices can get it
+                    this._ignoreNext=true;
+                    await this._tradesDoc(journal).set({trades:localTrades,updatedAt:Date.now()});
+                }
+            }catch(e){console.warn('Initial sync failed for',journal,e);}
+        }
+        App.update();
+    },
+    _tradesDoc(journal){
+        const{syncId}=this.getConfig();
+        return this.db.collection('journals').doc(syncId).collection(journal).doc('trades');
+    },
+    _coachDoc(journal,tradeId){
+        const{syncId}=this.getConfig();
+        return this.db.collection('journals').doc(syncId).collection(journal+'_coach').doc(tradeId);
+    },
+    async push(journal,trades){
+        if(!this._initialized)return;
+        this._ignoreNext=true;
+        try{await this._tradesDoc(journal).set({trades,updatedAt:Date.now()});}
+        catch(e){console.warn('Sync push failed:',e);}
+    },
+    async pushCoach(journal,tradeId,feedback){
+        if(!this._initialized)return;
+        try{await this._coachDoc(journal,tradeId).set(feedback);}
+        catch(e){console.warn('Coach sync push failed:',e);}
+    },
+    _startListeners(){
+        ['live','paper'].forEach(journal=>{
+            const unsub=this._tradesDoc(journal).onSnapshot(snap=>{
+                if(this._ignoreNext){this._ignoreNext=false;return;}
+                if(!snap.exists)return;
+                const remote=snap.data().trades;
+                if(!remote)return;
+                const currentLocal=localStorage.getItem('tjd_trades_'+journal);
+                const remoteStr=JSON.stringify(remote);
+                if(currentLocal===remoteStr)return;
+                localStorage.setItem('tjd_trades_'+journal,remoteStr);
+                if(Storage.getJournal()===journal){App.update();Toast.show('☁️ Synced from another device');}
+            },err=>console.warn('Sync listener error:',err));
+            this._unsubs.push(unsub);
+        });
+    },
+    stop(){this._unsubs.forEach(fn=>fn());this._unsubs=[];this._initialized=false;this.db=null;},
+    restart(){this.stop();this.init();},
+    _updateStatusBadge(){
+        const badge=document.getElementById('sync-status-badge');
+        if(!badge)return;
+        badge.textContent=this._initialized?'✅ Sync: Connected':'⚠️ Sync: Not configured';
+        badge.style.color=this._initialized?'var(--accent-green)':'var(--text-secondary)';
+    }
 };
 
 const Settings = {
@@ -494,9 +644,9 @@ const Storage = {
     get key(){return'tjd_trades_'+this.getJournal()},
     get coachPrefix(){return'tjd_coach_'+this.getJournal()+'_'},
     load(){const d=localStorage.getItem(this.key);return d?JSON.parse(d):[]},
-    save(t){localStorage.setItem(this.key,JSON.stringify(t))},
+    save(t){localStorage.setItem(this.key,JSON.stringify(t));if(FirebaseSync._initialized)FirebaseSync.push(this.getJournal(),t);},
     clear(){localStorage.removeItem(this.key)},
-    saveCoachFeedback(tradeId,fb){localStorage.setItem(this.coachPrefix+tradeId,JSON.stringify(fb));},
+    saveCoachFeedback(tradeId,fb){localStorage.setItem(this.coachPrefix+tradeId,JSON.stringify(fb));if(FirebaseSync._initialized)FirebaseSync.pushCoach(this.getJournal(),tradeId,fb);},
     loadCoachFeedback(tradeId){const d=localStorage.getItem(this.coachPrefix+tradeId);return d?JSON.parse(d):null;},
     allCoachFeedbacks(){
         const results=[],prefix=this.coachPrefix,trades=Storage.load();
@@ -763,7 +913,13 @@ const Coach = {
         if(!apiKey){return null;}
         const recent=allTrades.slice(-10);
         const winRate=recent.length?((recent.filter(t=>t.result==='win').length/recent.length)*100).toFixed(0):0;
-        const prompt=`You are a futures trading coach specializing in Smart Money Concepts (SMC) for micro futures traders.
+        const avgPnl=(recent.reduce((s,t)=>s+t.pnlDollar,0)/recent.length||0).toFixed(0);
+        const prompt=`You are a futures trading coach specializing in Inside Bar (IB) patterns and Initial Balance Breakout setups for micro futures traders.
+
+STRATEGY CONTEXT:
+- Inside Bar (IB): A bar whose HIGH and LOW are completely contained within the previous bar's (Mother Bar's) range. Trade the breakout of the IB in the direction of the trend.
+- Initial Balance Breakout (IBB): The Initial Balance is the price range formed in the FIRST HOUR of the RTH session (9:30-10:30 AM ET for NQ/ES). A breakout above/below this range is a high-probability trade.
+- Asia Session Gold: MGC/GC trades taken 6:00 PM - 4:00 AM ET benefit from different institutional flows. Gold often sweeps Asian highs/lows before the London open.
 
 Analyze this trade:
 - Contract: ${trade.contract} (${CONTRACTS[trade.contract]?.label||trade.contract})
@@ -776,13 +932,23 @@ Analyze this trade:
 - Strategy: ${trade.strategy||'Not specified'}
 - Notes: ${trade.notes||'None'}
 - Result: ${trade.result.toUpperCase()}
+Recent form (last ${recent.length} trades): Win rate ${winRate}%, Avg P&L $${avgPnl}
 
-Trader recent stats (last ${recent.length} trades): Win rate ${winRate}%, Avg P&L $${(recent.reduce((s,t)=>s+t.pnlDollar,0)/recent.length||0).toFixed(0)}
+IB/IBB COACHING FOCUS:
+If strategy contains "Inside Bar" or notes mention IB -> evaluate: Was there a clearly defined Mother Bar? Did the IB form inside the Mother Bar's high/low? Was entry triggered on a breakout of the IB high (long) or IB low (short)? Was stop loss placed at or beyond the Mother Bar's opposite extreme? Was the IB aligned with the higher timeframe trend?
+
+If strategy contains "IB Breakout" or notes mention IBB/Initial Balance -> evaluate: Was the Initial Balance range (first hour 9:30-10:30 ET) clearly identified? Was entry taken on a clean break and close ABOVE the IB high (long) or BELOW the IB low (short)? Was there a retest of the IB level before entry, or a direct breakout? Was the target set at the IB range extension (1x or 2x IB range projected)?
+
+If contract is MGC or GC -> add Asia session context: Was this trade during Asia session (6 PM - 4 AM ET)? Gold often sweeps Asian lows/highs before the London open. Did the trade align with this flow?
+
+If none of the above apply, provide general execution and risk management feedback.
 
 Respond ONLY with valid JSON (no markdown):
-{"score":8,"strengths":["bullet1","bullet2","bullet3"],"weaknesses":["bullet1","bullet2"],"smcInsight":"one paragraph about SMC concepts like liquidity pools, order blocks, fair value gaps, breaker blocks","patternAlert":"one sentence about patterns or null"}
+{"score":8,"setupType":"inside_bar","strengths":["bullet1","bullet2","bullet3"],"weaknesses":["bullet1","bullet2"],"ibAnalysis":"2-3 sentences specifically about the IB/IBB setup quality — mother bar, entry trigger, stop placement, target. Be direct and specific.","patternAlert":"one sentence about patterns across recent trades or null"}
 
-Tone: 70% encouraging and supportive, 30% honest and blunt. Be specific about this exact trade.`;
+setupType must be one of: "inside_bar", "ib_breakout", "gold_asia", "mixed", "other"
+
+Tone: 70% encouraging, 30% honest and blunt. Be specific to THIS trade and THIS setup type.`;
 
         try{
             const res=await fetch('https://api.anthropic.com/v1/messages',{
@@ -815,11 +981,16 @@ Tone: 70% encouraging and supportive, 30% honest and blunt. Be specific about th
             return;
         }
         const scoreColor=fb.score>=7?'var(--accent-green)':fb.score>=5?'var(--accent-yellow)':'var(--accent-red)';
+        const setupLabel={'inside_bar':'Inside Bar','ib_breakout':'IB Breakout','gold_asia':'Gold/Asia Session','mixed':'Mixed Setup','other':'Setup'}[fb.setupType]||'Setup';
         container.innerHTML=`
         <div class="coach-score">
           <div class="coach-score-num" style="color:${scoreColor}">${fb.score}/10</div>
-          <div class="coach-score-label">SMC Alignment Score</div>
+          <div class="coach-score-label">${setupLabel} Score</div>
         </div>
+        ${fb.ibAnalysis?`<div class="coach-section">
+          <div class="coach-section-title ib">📐 IB/IBB Analysis</div>
+          <div class="coach-insight" style="border-left-color:#f59e0b">${fb.ibAnalysis}</div>
+        </div>`:''}
         ${fb.strengths?.length?`<div class="coach-section">
           <div class="coach-section-title good">✅ What You Did Well</div>
           <ul class="coach-bullets">${fb.strengths.map(s=>`<li>${s}</li>`).join('')}</ul>
@@ -1035,50 +1206,84 @@ const ScreenshotImport={
             document.getElementById('screenshot-preview').innerHTML=`<img src="${dataUrl}" style="width:100%;border-radius:4px">`;
             document.getElementById('screenshot-date').valueAsDate=new Date();
             document.getElementById('import-modal').classList.add('active');
+            const status=document.getElementById('vision-status');
             const apiKey=Settings.getApiKey();
-            if(apiKey){await this.autoFillFromVision(dataUrl,file.type);}
+            if(!apiKey){
+                status.textContent='⚠️ No API key — go to Settings and add your Anthropic API key to enable AI auto-fill.';
+                status.style.color='var(--accent-yellow)';
+                status.style.background='rgba(255,215,0,.08)';
+                status.style.padding='10px';
+                status.style.borderRadius='6px';
+                return;
+            }
+            status.style.background='';status.style.padding='';
+            // Resize + convert image to JPEG before sending (handles HEIC, large PNGs, etc.)
+            const compressed=await this._compressImage(dataUrl);
+            await this.autoFillFromVision(compressed,'image/jpeg');
         };
         reader.readAsDataURL(file);
     },
+    _compressImage(dataUrl){
+        return new Promise(resolve=>{
+            const img=new Image();
+            img.onload=()=>{
+                const MAX=1200;
+                let w=img.width,h=img.height;
+                if(w>MAX||h>MAX){const r=Math.min(MAX/w,MAX/h);w=Math.round(w*r);h=Math.round(h*r);}
+                const canvas=document.createElement('canvas');
+                canvas.width=w;canvas.height=h;
+                canvas.getContext('2d').drawImage(img,0,0,w,h);
+                resolve(canvas.toDataURL('image/jpeg',0.85));
+            };
+            img.onerror=()=>resolve(dataUrl); // fallback to original if canvas fails
+            img.src=dataUrl;
+        });
+    },
     async autoFillFromVision(dataUrl,mimeType){
         const status=document.getElementById('vision-status');
-        status.textContent='🤖 AI reading your screenshot...';
+        status.innerHTML='<span style="color:var(--accent-cyan)">🤖 AI is reading your screenshot...</span>';
         const base64=dataUrl.split(',')[1];
-        const mediaType=mimeType||'image/jpeg';
-        const prompt='Extract trade details from this trading screenshot. Return ONLY valid JSON with these fields (use null if not visible): {"contract":"MES","direction":"long","entryPrice":5100.25,"exitPrice":5115.50,"numContracts":2,"stopLoss":5090.00,"takeProfit":5130.00,"strategy":"breakout","notes":"","accountBalance":50000.00}. For contract, match to: MES, MNQ, MCL, MGC, ES, NQ, CL, or GC. For accountBalance, look for any visible account balance, total equity, or net liquidation value.';
+        const prompt='Extract trade details from this trading screenshot. Return ONLY valid JSON (no markdown) with these fields (use null if not visible): {"contract":"MES","direction":"long","entryPrice":5100.25,"exitPrice":5115.50,"numContracts":2,"stopLoss":5090.00,"takeProfit":5130.00,"strategy":"breakout","notes":"","accountBalance":50000.00}. Contract must be one of: MES, MNQ, MCL, MGC, ES, NQ, CL, GC. For accountBalance, look for any visible account balance, total equity, or net liquidation value. Be precise with prices.';
         try{
             const res=await fetch('https://api.anthropic.com/v1/messages',{
                 method:'POST',
                 headers:{'Content-Type':'application/json','x-api-key':Settings.getApiKey(),'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
                 body:JSON.stringify({
-                    model:'claude-sonnet-4-6',max_tokens:300,
+                    model:'claude-sonnet-4-6',max_tokens:400,
                     messages:[{role:'user',content:[
-                        {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
+                        {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},
                         {type:'text',text:prompt}
                     ]}]
                 })
             });
-            if(!res.ok)throw new Error('Vision API failed');
+            if(!res.ok){
+                const err=await res.json().catch(()=>({}));
+                throw new Error(err.error?.message||`API error ${res.status}`);
+            }
             const data=await res.json();
             const text=data.content[0].text.trim();
             const jsonMatch=text.match(/\{[\s\S]*\}/);
             if(!jsonMatch)throw new Error('No JSON in response');
-            const extracted=JSON.parse(jsonMatch[0]);
-            if(extracted.contract&&CONTRACTS[extracted.contract])document.getElementById('screenshot-contract').value=extracted.contract;
-            if(extracted.direction)document.getElementById('screenshot-direction').value=extracted.direction;
-            if(extracted.entryPrice)document.getElementById('screenshot-entry').value=extracted.entryPrice;
-            if(extracted.exitPrice)document.getElementById('screenshot-exit').value=extracted.exitPrice;
-            if(extracted.numContracts)document.getElementById('screenshot-contracts').value=extracted.numContracts;
-            if(extracted.stopLoss)document.getElementById('screenshot-sl').value=extracted.stopLoss;
-            if(extracted.takeProfit)document.getElementById('screenshot-tp').value=extracted.takeProfit;
-            if(extracted.strategy)document.getElementById('screenshot-strategy').value=extracted.strategy;
-            if(extracted.notes)document.getElementById('screenshot-notes').value=extracted.notes;
-            if(extracted.accountBalance)document.getElementById('screenshot-balance-after').value=extracted.accountBalance;
-            status.textContent='✅ AI auto-filled the form — please verify and adjust as needed.';
-            status.style.color='var(--accent-green)';
+            const x=JSON.parse(jsonMatch[0]);
+            if(x.contract&&CONTRACTS[x.contract])document.getElementById('screenshot-contract').value=x.contract;
+            if(x.direction)document.getElementById('screenshot-direction').value=x.direction;
+            if(x.entryPrice)document.getElementById('screenshot-entry').value=x.entryPrice;
+            if(x.exitPrice)document.getElementById('screenshot-exit').value=x.exitPrice;
+            if(x.numContracts)document.getElementById('screenshot-contracts').value=x.numContracts;
+            if(x.stopLoss)document.getElementById('screenshot-sl').value=x.stopLoss;
+            if(x.takeProfit)document.getElementById('screenshot-tp').value=x.takeProfit;
+            if(x.strategy)document.getElementById('screenshot-strategy').value=x.strategy;
+            if(x.notes)document.getElementById('screenshot-notes').value=x.notes;
+            if(x.accountBalance)document.getElementById('screenshot-balance-after').value=x.accountBalance;
+            status.innerHTML='<span style="color:var(--accent-green)">✅ Auto-filled from screenshot — verify the values then click Add Trade.</span>';
         }catch(err){
-            status.textContent='ℹ️ Could not auto-fill — please enter details manually.';
-            status.style.color='var(--text-secondary)';
+            const msg=err.message||'';
+            const hint=msg.includes('401')||msg.includes('authentication')?'Invalid API key — check Settings ⚙️':
+                       msg.includes('400')?'Bad image format — try a clearer PNG or JPEG screenshot.':
+                       msg.includes('No JSON')?'AI response unclear — try a cleaner screenshot.':
+                       'Could not read screenshot ('+msg+'). Enter details manually.';
+            status.innerHTML=`<span style="color:var(--accent-red)">⚠️ ${hint}</span>`;
+            console.error('Vision error:',err);
         }
     }
 };
@@ -1212,7 +1417,7 @@ const Charts={
 
 const App={
     init(){
-        Storage.migrate();Themes.init();
+        Storage.migrate();FirebaseSync.init();Themes.init();
         const journal=Storage.getJournal();
         this.updateJournalUI(journal);
         let trades=Storage.load();
@@ -1256,9 +1461,17 @@ const App={
             document.getElementById('settings-modal').classList.add('active');
             const cur=localStorage.getItem('tjd_theme')||'ocean';
             document.querySelectorAll('.theme-swatch').forEach(s=>s.classList.toggle('selected',s.dataset.theme===cur));
+            const fbCfg=FirebaseSync.getConfig();
+            document.getElementById('settings-sync-id').value=fbCfg.syncId;
+            document.getElementById('settings-fb-api-key').value=fbCfg.apiKey;
+            document.getElementById('settings-fb-project-id').value=fbCfg.projectId;
+            document.getElementById('settings-fb-app-id').value=fbCfg.appId;
+            FirebaseSync._updateStatusBadge();
         });
         document.getElementById('save-settings-btn').addEventListener('click',()=>{
             Settings.save({apiKey:document.getElementById('settings-api-key').value.trim(),autoCoach:document.getElementById('settings-auto-coach').value,finnhubKey:document.getElementById('settings-finnhub-key').value.trim(),dailyLossLimit:document.getElementById('settings-daily-limit').value||'0'});
+            FirebaseSync.saveConfig({syncId:document.getElementById('settings-sync-id').value.trim(),apiKey:document.getElementById('settings-fb-api-key').value.trim(),projectId:document.getElementById('settings-fb-project-id').value.trim(),appId:document.getElementById('settings-fb-app-id').value.trim()});
+            FirebaseSync.restart();
             document.getElementById('settings-modal').classList.remove('active');
             DailyLimit.check(Storage.load());
             Toast.show('Settings saved!');
@@ -1368,19 +1581,26 @@ const Themes = {
             '--bg-primary':'#111111','--bg-secondary':'#1a1a1a','--bg-card':'#222222','--bg-card-hover':'#2a2a2a',
             '--border':'#333333','--accent-cyan':'#f59e0b','--accent-green':'#34d399','--accent-red':'#f87171',
             '--accent-yellow':'#fb923c','--text-primary':'#e5e5e5','--text-secondary':'#a3a3a3','--text-muted':'#525252'
+        },
+        tradezella:{
+            '--bg-primary':'#0d0f18','--bg-secondary':'#13151f','--bg-card':'#1a1c28','--bg-card-hover':'#20223200',
+            '--border':'#2e3148','--accent-cyan':'#8b5cf6','--accent-green':'#10b981','--accent-red':'#f43f5e',
+            '--accent-yellow':'#f59e0b','--text-primary':'#f1f5f9','--text-secondary':'#94a3b8','--text-muted':'#475569'
         }
     },
     apply(name){
         const t=this.themes[name];if(!t)return;
         const root=document.documentElement;
         Object.entries(t).forEach(([k,v])=>root.style.setProperty(k,v));
+        document.body.className=document.body.className.replace(/theme-\w+/g,'').trim();
+        document.body.classList.add('theme-'+name);
         localStorage.setItem('tjd_theme',name);
         document.querySelectorAll('.theme-swatch').forEach(s=>{
             s.classList.toggle('selected',s.dataset.theme===name);
         });
     },
     init(){
-        const saved=localStorage.getItem('tjd_theme')||'ocean';
+        const saved=localStorage.getItem('tjd_theme')||'tradezella';
         this.apply(saved);
     }
 };
