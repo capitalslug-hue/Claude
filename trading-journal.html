@@ -1252,21 +1252,32 @@ const ScreenshotImport={
         const status=document.getElementById('vision-status');
         status.innerHTML='<span style="color:var(--accent-cyan)">🤖 AI is reading your screenshot...</span>';
         const base64=dataUrl.split(',')[1];
-        const prompt=`This is a TradingView trading screenshot. Extract the trade details and return ONLY valid JSON (no markdown).
+        const prompt=`This is a TradingView trading screenshot. Extract trade details and return ONLY valid JSON (no markdown).
 
-TradingView-specific fields to look for:
-- Entry price: labeled "Avg Price", "Filled", "Entry", "Open Price", or the price next to a filled order marker
-- Stop Loss: labeled "Stop", "SL", "Stop Loss", or a red horizontal order line with a price
-- Take Profit: labeled "Limit", "TP", "Take Profit", or a green horizontal order line with a price
-- Direction: "Buy" or "Long" = long, "Sell" or "Short" = short
-- Quantity/contracts: labeled "Qty", "Contracts", "Size"
-- Exit price: labeled "Close Price", "Exit", "Avg Exit", or price on a closed position
-- Symbol: /MES, /MNQ, /MGC, /MCL, /ES, /NQ, /CL, /GC — strip the leading slash
+THE SCREENSHOT MAY BE ONE OF TWO TYPES:
 
-Return this JSON structure (null for any field not visible):
-{"contract":"MES","direction":"long","entryPrice":5100.25,"exitPrice":5115.50,"numContracts":2,"stopLoss":5090.00,"takeProfit":5130.00,"strategy":null,"notes":null,"accountBalance":null}
+TYPE A — Order ticket / position panel / trade history (cleanest source):
+- Entry price: "Avg Price", "Filled", "Entry", "Open Price"
+- Stop Loss: "Stop", "SL", "Stop Loss" WITH an actual price number
+- Take Profit: "Limit", "TP", "Take Profit" WITH an actual price number
+- Exit price: "Close Price", "Exit", "Avg Exit"
+- Quantity: "Qty", "Contracts", "Size"
 
-Contract must be one of: MES, MNQ, MCL, MGC, ES, NQ, CL, GC. Be precise with all prices — read every digit carefully.`;
+TYPE B — Chart with position lines drawn on it:
+- A horizontal line with a quantity badge (e.g. "5" or "-5") and a USD P&L amount IS an open position. The PRICE of that line is the entry/average price.
+- A NEGATIVE quantity (e.g. "-5") means a SHORT trade. A positive quantity means LONG.
+- "TP" and "SL" shown as small buttons next to a line are just UI controls — do NOT treat them as prices. Only report stopLoss/takeProfit if there is an actual labeled price line for them.
+- If multiple position lines exist, pick the one that has TP/SL controls or is closest to current price as the active trade.
+- Set stopLoss/takeProfit to null if no real price is visible — do NOT guess.
+
+COMMON FIELDS:
+- Direction: "Buy"/"Long"/positive qty = long; "Sell"/"Short"/negative qty = short
+- Symbol: Micro Gold Futures = MGC, Micro E-mini S&P = MES, Micro E-mini Nasdaq = MNQ, Micro Crude = MCL; /ES /NQ /CL /GC strip the slash
+
+Return this JSON (use null for anything not clearly visible — never guess a price):
+{"contract":"MGC","direction":"short","entryPrice":4528.2,"exitPrice":null,"numContracts":5,"stopLoss":null,"takeProfit":null,"strategy":null,"notes":null,"accountBalance":null}
+
+Contract must be one of: MES, MNQ, MCL, MGC, ES, NQ, CL, GC. Read every digit of every price carefully.`;
         try{
             const res=await fetch('https://api.anthropic.com/v1/messages',{
                 method:'POST',
