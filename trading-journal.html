@@ -1252,13 +1252,27 @@ const ScreenshotImport={
         const status=document.getElementById('vision-status');
         status.innerHTML='<span style="color:var(--accent-cyan)">🤖 AI is reading your screenshot...</span>';
         const base64=dataUrl.split(',')[1];
-        const prompt='Extract trade details from this trading screenshot. Return ONLY valid JSON (no markdown) with these fields (use null if not visible): {"contract":"MES","direction":"long","entryPrice":5100.25,"exitPrice":5115.50,"numContracts":2,"stopLoss":5090.00,"takeProfit":5130.00,"strategy":"breakout","notes":"","accountBalance":50000.00}. Contract must be one of: MES, MNQ, MCL, MGC, ES, NQ, CL, GC. For accountBalance, look for any visible account balance, total equity, or net liquidation value. Be precise with prices.';
+        const prompt=`This is a TradingView trading screenshot. Extract the trade details and return ONLY valid JSON (no markdown).
+
+TradingView-specific fields to look for:
+- Entry price: labeled "Avg Price", "Filled", "Entry", "Open Price", or the price next to a filled order marker
+- Stop Loss: labeled "Stop", "SL", "Stop Loss", or a red horizontal order line with a price
+- Take Profit: labeled "Limit", "TP", "Take Profit", or a green horizontal order line with a price
+- Direction: "Buy" or "Long" = long, "Sell" or "Short" = short
+- Quantity/contracts: labeled "Qty", "Contracts", "Size"
+- Exit price: labeled "Close Price", "Exit", "Avg Exit", or price on a closed position
+- Symbol: /MES, /MNQ, /MGC, /MCL, /ES, /NQ, /CL, /GC — strip the leading slash
+
+Return this JSON structure (null for any field not visible):
+{"contract":"MES","direction":"long","entryPrice":5100.25,"exitPrice":5115.50,"numContracts":2,"stopLoss":5090.00,"takeProfit":5130.00,"strategy":null,"notes":null,"accountBalance":null}
+
+Contract must be one of: MES, MNQ, MCL, MGC, ES, NQ, CL, GC. Be precise with all prices — read every digit carefully.`;
         try{
             const res=await fetch('https://api.anthropic.com/v1/messages',{
                 method:'POST',
                 headers:{'Content-Type':'application/json','x-api-key':Settings.getApiKey(),'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
                 body:JSON.stringify({
-                    model:'claude-opus-4-7',max_tokens:400,
+                    model:'claude-opus-4-7',max_tokens:600,
                     messages:[{role:'user',content:[
                         {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},
                         {type:'text',text:prompt}
