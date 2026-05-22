@@ -267,7 +267,7 @@ body.theme-tradezella .coach-panel{border-color:#8b5cf6;background:linear-gradie
 <div class="coach-panel" id="coach-panel">
 <div class="coach-header">
 <div class="coach-avatar">🤖</div>
-<div><div class="coach-title">AI Trading Coach</div><div class="coach-subtitle">SMC Analysis</div></div>
+<div><div class="coach-title">AI Trading Coach</div><div class="coach-subtitle">IB/IBB Analysis</div></div>
 </div>
 <div id="coach-content"></div>
 </div>
@@ -950,34 +950,33 @@ setupType must be one of: "inside_bar", "ib_breakout", "gold_asia", "mixed", "ot
 
 Tone: 70% encouraging, 30% honest and blunt. Be specific to THIS trade and THIS setup type.`;
 
-        try{
-            const res=await fetch('https://api.anthropic.com/v1/messages',{
-                method:'POST',
-                headers:{
-                    'Content-Type':'application/json',
-                    'x-api-key':apiKey,
-                    'anthropic-version':'2023-06-01',
-                    'anthropic-dangerous-direct-browser-access':'true'
-                },
-                body:JSON.stringify({
-                    model:'claude-sonnet-4-6',
-                    max_tokens:1000,
-                    messages:[{role:'user',content:prompt}]
-                })
-            });
-            if(!res.ok){const e=await res.json();throw new Error(e.error?.message||'API error');}
-            const data=await res.json();
-            const text=data.content[0].text.trim();
-            return JSON.parse(text);
-        }catch(e){
-            console.error('Coach error:',e);
-            return{score:0,error:e.message};
+        this._lastTrade=trade;this._lastAllTrades=allTrades;
+        const reqBody=JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,messages:[{role:'user',content:prompt}]});
+        const reqHeaders={'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'};
+        let lastErr;
+        for(let attempt=0;attempt<3;attempt++){
+            if(attempt>0)await new Promise(r=>setTimeout(r,attempt*3000));
+            try{
+                const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:reqHeaders,body:reqBody});
+                if(res.status===529){lastErr='overloaded';continue;}
+                if(!res.ok){const e=await res.json();throw new Error(e.error?.message||'API error');}
+                const data=await res.json();
+                return JSON.parse(data.content[0].text.trim());
+            }catch(e){
+                if(lastErr==='overloaded')continue;
+                console.error('Coach error:',e);
+                return{score:0,error:e.message};
+            }
         }
+        return{score:0,error:'overloaded',retryable:true};
     },
 
     renderFeedback(fb, container){
         if(fb.error){
-            container.innerHTML=`<div style="color:var(--accent-red);padding:12px">Coach error: ${fb.error}</div>`;
+            const isOverload=fb.error==='overloaded';
+            const msg=isOverload?'⏳ AI is temporarily busy. Please try again in a moment.':`Coach error: ${fb.error}`;
+            const btn=fb.retryable?`<br><button onclick="Coach.retry()" class="btn-secondary" style="margin-top:10px;font-size:12px">🔄 Try Again</button>`:'';
+            container.innerHTML=`<div style="color:${isOverload?'var(--accent-yellow)':'var(--accent-red)'};padding:12px">${msg}${btn}</div>`;
             return;
         }
         const scoreColor=fb.score>=7?'var(--accent-green)':fb.score>=5?'var(--accent-yellow)':'var(--accent-red)';
@@ -1042,6 +1041,15 @@ Tone: 70% encouraging, 30% honest and blunt. Be specific to THIS trade and THIS 
         const content=document.getElementById('coach-detail-content');
         this.renderFeedback(fb,content);
         modal.classList.add('active');
+    },
+    async retry(){
+        if(!this._lastTrade)return;
+        const panel=document.getElementById('coach-panel');
+        const content=document.getElementById('coach-content');
+        panel.classList.add('visible');
+        this.showSpinner(content);
+        const fb=await this.analyze(this._lastTrade,this._lastAllTrades||Storage.load());
+        if(fb){this.renderFeedback(fb,content);Storage.saveCoachFeedback(this._lastTrade.id,fb);}
     }
 };
 
