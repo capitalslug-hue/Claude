@@ -540,6 +540,8 @@ body.theme-iphone .journal-btn.paper.active{background:rgba(0,122,255,.15);borde
 <input type="password" id="settings-fb-app-id" class="api-key-input" placeholder="1:123456789:web:abc123...">
 </div>
 <div id="sync-status-badge" style="font-size:12px;padding:8px;border-radius:4px;background:var(--bg-secondary);color:var(--text-secondary);margin-top:4px">Sync: Not configured</div>
+<button class="btn-secondary" id="copy-setup-link-btn" style="margin-top:8px;width:100%;font-size:12px">📋 Copy Mobile Setup Link</button>
+<small style="color:var(--text-secondary);margin-top:4px;display:block">After saving Firebase config, tap this to copy a link. Open it on your phone to restore Firebase config instantly. Does not include your Anthropic API key.</small>
 <div style="margin-top:10px;font-size:12px;color:var(--text-muted)">
 Setup: <a href="https://console.firebase.google.com" target="_blank" style="color:var(--accent-cyan);text-decoration:none">console.firebase.google.com</a> → New project → Add Web App → Enable Firestore (test mode) → paste the 3 values above.
 </div>
@@ -635,6 +637,7 @@ const FirebaseSync = {
                 }
             }catch(e){console.warn('Initial sync failed for',journal,e);}
         }
+        await this.pullPrefs();
         App.update();
     },
     _tradesDoc(journal){
@@ -674,6 +677,20 @@ const FirebaseSync = {
     },
     stop(){this._unsubs.forEach(fn=>fn());this._unsubs=[];this._initialized=false;this.db=null;},
     restart(){this.stop();this.init();},
+    _prefsDoc(){return this.db.collection('prefs').doc(this.getConfig().syncId);},
+    async pushPrefs(){
+        if(!this._initialized)return;
+        const prefs={theme:localStorage.getItem('tjd_theme')||'iphone',autoCoach:localStorage.getItem('tjd_auto_coach')||'yes',dailyLossLimit:localStorage.getItem('tjd_daily_loss_limit')||'0'};
+        await this._prefsDoc().set(prefs).catch(()=>{});
+    },
+    async pullPrefs(){
+        const snap=await this._prefsDoc().get().catch(()=>null);
+        if(!snap||!snap.exists)return;
+        const p=snap.data();
+        if(p.theme){localStorage.setItem('tjd_theme',p.theme);Themes.apply(p.theme);}
+        if(p.autoCoach)localStorage.setItem('tjd_auto_coach',p.autoCoach);
+        if(p.dailyLossLimit)localStorage.setItem('tjd_daily_loss_limit',p.dailyLossLimit);
+    },
     _updateStatusBadge(){
         const badge=document.getElementById('sync-status-badge');
         if(!badge)return;
@@ -1515,6 +1532,9 @@ const Charts={
 
 const App={
     init(){
+        if(location.hash.startsWith('#setup=')){
+            try{const cfg=JSON.parse(atob(location.hash.slice(7)));FirebaseSync.saveConfig(cfg);history.replaceState(null,'',location.pathname);Toast.show('Firebase config restored — connecting…');}catch(e){}
+        }
         Storage.migrate();FirebaseSync.init();Themes.init();
         const journal=Storage.getJournal();
         this.updateJournalUI(journal);
@@ -1572,9 +1592,18 @@ const App={
             Settings.save({apiKey:document.getElementById('settings-api-key').value.trim(),autoCoach:document.getElementById('settings-auto-coach').value,finnhubKey:document.getElementById('settings-finnhub-key').value.trim(),dailyLossLimit:document.getElementById('settings-daily-limit').value||'0'});
             FirebaseSync.saveConfig({syncId:document.getElementById('settings-sync-id').value.trim(),apiKey:document.getElementById('settings-fb-api-key').value.trim(),projectId:document.getElementById('settings-fb-project-id').value.trim(),appId:document.getElementById('settings-fb-app-id').value.trim()});
             FirebaseSync.restart();
+            setTimeout(()=>FirebaseSync.pushPrefs(),2000);
             document.getElementById('settings-modal').classList.remove('active');
             DailyLimit.check(Storage.load());
             Toast.show('Settings saved!');
+        });
+        document.getElementById('copy-setup-link-btn').addEventListener('click',()=>{
+            const cfg=FirebaseSync.getConfig();
+            if(!cfg.syncId){Toast.show('Save Firebase config first','error');return;}
+            const encoded=btoa(JSON.stringify(cfg));
+            const link=`${location.origin}${location.pathname}#setup=${encoded}`;
+            if(navigator.clipboard){navigator.clipboard.writeText(link).then(()=>Toast.show('📋 Setup link copied! Open it on your phone.')).catch(()=>{prompt('Copy this setup link:',link);});}
+            else{prompt('Copy this setup link:',link);}
         });
         document.querySelectorAll('.modal-close').forEach(btn=>{
             btn.addEventListener('click',e=>{e.target.closest('.modal-overlay').classList.remove('active');});
