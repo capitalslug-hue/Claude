@@ -37,6 +37,8 @@ body{background:var(--bg-primary);color:var(--text-primary);font-family:-apple-s
 .journal-btn.live.active{background:rgba(0,255,136,.15);border-color:var(--accent-green);color:var(--accent-green)}
 .journal-btn.paper.active{background:rgba(0,212,255,.15);border-color:var(--accent-cyan);color:var(--accent-cyan)}
 .journal-btn:hover{border-color:var(--accent-cyan);color:var(--text-primary)}
+#mobile-journal-switcher{display:none}
+@media(max-width:768px){#mobile-journal-switcher{display:flex;gap:8px;padding:8px 0 6px;margin-bottom:4px}}
 #main-content{margin-left:260px;padding:24px;flex:1;min-height:100vh}
 .section-hidden{display:none!important}
 section{margin-bottom:32px}
@@ -246,6 +248,10 @@ body.theme-iphone .journal-btn.paper.active{background:rgba(0,122,255,.15);borde
 </div>
 </aside>
 <main id="main-content">
+<div id="mobile-journal-switcher">
+  <button class="journal-btn live" id="mob-btn-live" onclick="App.switchJournal('live')">🟢 Live</button>
+  <button class="journal-btn paper" id="mob-btn-paper" onclick="App.switchJournal('paper')">📄 Paper</button>
+</div>
 <div id="daily-limit-banner">
 <span id="daily-limit-msg"></span>
 <button onclick="DailyLimit.dismiss()" style="background:none;border:1px solid var(--accent-red);color:var(--accent-red);padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px">Dismiss</button>
@@ -1527,6 +1533,8 @@ const App={
         document.getElementById('btn-journal-live').classList.toggle('active',journal==='live');
         document.getElementById('btn-journal-paper').classList.toggle('active',journal==='paper');
         document.querySelector('.sidebar-logo').textContent=journal==='live'?'📊 Trading Journal — LIVE':'📊 Trading Journal — PAPER';
+        const ml=document.getElementById('mob-btn-live');const mp=document.getElementById('mob-btn-paper');
+        if(ml&&mp){ml.classList.toggle('active',journal==='live');mp.classList.toggle('active',journal==='paper');}
     },
     switchJournal(journal){
         Storage.setJournal(journal);
