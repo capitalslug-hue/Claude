@@ -38,7 +38,10 @@ body{background:var(--bg-primary);color:var(--text-primary);font-family:-apple-s
 .journal-btn.paper.active{background:rgba(0,212,255,.15);border-color:var(--accent-cyan);color:var(--accent-cyan)}
 .journal-btn:hover{border-color:var(--accent-cyan);color:var(--text-primary)}
 #mobile-journal-switcher{display:none}
-@media(max-width:768px){#mobile-journal-switcher{display:flex;gap:8px;padding:8px 0 6px;margin-bottom:4px}}
+@media(max-width:768px){
+  #mobile-journal-switcher{display:flex;gap:8px;padding:8px 0 6px;margin-bottom:4px}
+  #main-content{padding-top:calc(12px + env(safe-area-inset-top,44px))!important}
+}
 #main-content{margin-left:260px;padding:24px;flex:1;min-height:100vh}
 .section-hidden{display:none!important}
 section{margin-bottom:32px}
