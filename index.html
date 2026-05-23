@@ -2,8 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Trading Journal Dashboard</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0d0f18" id="meta-theme-color">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TJ Dashboard">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -175,12 +180,39 @@ body.theme-tradezella .stat-card:hover{border-color:rgba(139,92,246,.5);box-shad
 body.theme-tradezella .stat-value{font-size:26px}
 body.theme-tradezella .sidebar-logo{background:linear-gradient(135deg,#8b5cf6,#10b981);background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent}
 body.theme-tradezella .coach-panel{border-color:#8b5cf6;background:linear-gradient(135deg,#0f0f20,#1a1a35)}
+/* iPhone light theme */
+body.theme-iphone .sidebar-logo{background:linear-gradient(135deg,#007aff,#34c759);background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+body.theme-iphone .nav-btn{border-radius:10px;margin:2px 8px;width:calc(100% - 16px)}
+body.theme-iphone .nav-btn.active{background:rgba(0,122,255,.1);color:#007aff;border-left:none;padding-left:20px}
+body.theme-iphone .stat-card{border-radius:13px;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+body.theme-iphone .stat-card:hover{box-shadow:0 4px 12px rgba(0,122,255,.15);transform:translateY(-1px)}
+body.theme-iphone .trade-table{border-radius:13px}
+body.theme-iphone input,body.theme-iphone select,body.theme-iphone textarea{background:#f2f2f7;border-color:#e5e5ea}
+body.theme-iphone .badge.win{background:rgba(52,199,89,.15)}
+body.theme-iphone .badge.loss{background:rgba(255,59,48,.15)}
+body.theme-iphone .coach-panel{background:#fff;border-color:#007aff}
+body.theme-iphone .journal-btn.live.active{background:rgba(52,199,89,.15);border-color:#34c759;color:#34c759}
+body.theme-iphone .journal-btn.paper.active{background:rgba(0,122,255,.15);border-color:#007aff;color:#007aff}
+/* Day/Night toggle */
+.day-night-toggle{display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 12px 0}
+.dn-label{font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;user-select:none}
+.dn-switch{position:relative;display:inline-block;width:44px;height:24px;cursor:pointer;flex-shrink:0}
+.dn-switch input{opacity:0;width:0;height:0;position:absolute}
+.dn-track{position:absolute;inset:0;background:var(--border);border-radius:12px;transition:background .25s}
+.dn-thumb{position:absolute;top:3px;left:3px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform .25s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+#dn-checkbox:checked~.dn-track{background:var(--accent-cyan)}
+#dn-checkbox:checked~.dn-track .dn-thumb{transform:translateX(20px)}
 </style>
 </head>
 <body>
 <div id="app">
 <aside id="sidebar">
 <div class="sidebar-logo">📊 Trading Journal</div>
+<div class="day-night-toggle">
+<span class="dn-label">Dark</span>
+<label class="dn-switch"><input type="checkbox" id="dn-checkbox"><span class="dn-track"><span class="dn-thumb"></span></span></label>
+<span class="dn-label">Light</span>
+</div>
 <div class="journal-switcher">
 <button class="journal-btn live active" id="btn-journal-live">🟢 Live</button>
 <button class="journal-btn paper" id="btn-journal-paper">📄 Paper</button>
@@ -466,6 +498,10 @@ body.theme-tradezella .coach-panel{border-color:#8b5cf6;background:linear-gradie
 <div class="theme-swatch" data-theme="tradezella" onclick="Themes.apply('tradezella')">
   <div class="theme-dots"><div class="theme-dot" style="background:#0d0f18;border:1px solid #444"></div><div class="theme-dot" style="background:#8b5cf6"></div><div class="theme-dot" style="background:#10b981"></div></div>
   <span class="theme-name">Tradezella</span>
+</div>
+<div class="theme-swatch" data-theme="iphone" onclick="Themes.apply('iphone')">
+  <div class="theme-dots"><div class="theme-dot" style="background:#f2f2f7;border:1px solid #ccc"></div><div class="theme-dot" style="background:#007aff"></div><div class="theme-dot" style="background:#34c759"></div></div>
+  <span class="theme-name">iPhone</span>
 </div>
 </div>
 </div>
@@ -1521,6 +1557,7 @@ const App={
         document.getElementById('export-json-btn').addEventListener('click',()=>DataIO.exportJSON());
         document.getElementById('restore-json-btn').addEventListener('click',()=>document.getElementById('restore-json-input').click());
         document.getElementById('restore-json-input').addEventListener('change',e=>{if(e.target.files[0])DataIO.importJSON(e.target.files[0]);e.target.value='';});
+        document.getElementById('dn-checkbox').addEventListener('change',()=>Themes.toggleDayNight());
     },
     update(){
         const trades=Storage.load();
@@ -1620,6 +1657,11 @@ const Themes = {
             '--bg-primary':'#0d0f18','--bg-secondary':'#13151f','--bg-card':'#1a1c28','--bg-card-hover':'#20223200',
             '--border':'#2e3148','--accent-cyan':'#8b5cf6','--accent-green':'#10b981','--accent-red':'#f43f5e',
             '--accent-yellow':'#f59e0b','--text-primary':'#f1f5f9','--text-secondary':'#94a3b8','--text-muted':'#475569'
+        },
+        iphone:{
+            '--bg-primary':'#f2f2f7','--bg-secondary':'#ffffff','--bg-card':'#ffffff','--bg-card-hover':'#f9f9fb',
+            '--border':'#e5e5ea','--accent-cyan':'#007aff','--accent-green':'#34c759','--accent-red':'#ff3b30',
+            '--accent-yellow':'#ff9500','--text-primary':'#000000','--text-secondary':'#6d6d72','--text-muted':'#aeaeb2'
         }
     },
     apply(name){
@@ -1629,9 +1671,23 @@ const Themes = {
         document.body.className=document.body.className.replace(/theme-\w+/g,'').trim();
         document.body.classList.add('theme-'+name);
         localStorage.setItem('tjd_theme',name);
+        const mc=document.getElementById('meta-theme-color');
+        if(mc)mc.content=name==='iphone'?'#f2f2f7':'#0d0f18';
         document.querySelectorAll('.theme-swatch').forEach(s=>{
             s.classList.toggle('selected',s.dataset.theme===name);
         });
+        this.updateToggle(name);
+    },
+    toggleDayNight(){
+        const current=localStorage.getItem('tjd_theme')||'tradezella';
+        const isLight=current==='iphone';
+        const next=isLight?(localStorage.getItem('tjd_last_dark')||'tradezella'):'iphone';
+        if(!isLight)localStorage.setItem('tjd_last_dark',current);
+        this.apply(next);
+    },
+    updateToggle(name){
+        const cb=document.getElementById('dn-checkbox');
+        if(cb)cb.checked=name==='iphone';
     },
     init(){
         const saved=localStorage.getItem('tjd_theme')||'tradezella';
@@ -1956,6 +2012,7 @@ const News = {
 };
 
 App.init();
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
 </body>
 </html>
