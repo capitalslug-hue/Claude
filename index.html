@@ -948,6 +948,7 @@ const Navigation={
         }catch(e){}
     }
 };
+const Nav = Navigation;
 
 const Coach = {
     async analyze(trade, allTrades){
@@ -1708,7 +1709,7 @@ const Themes = {
         if(cb)cb.checked=name==='iphone';
     },
     init(){
-        const saved=localStorage.getItem('tjd_theme')||'tradezella';
+        const saved=localStorage.getItem('tjd_theme')||'iphone';
         this.apply(saved);
     }
 };
@@ -2088,6 +2089,7 @@ if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch
   <button class="tab-btn" onclick="Nav.showSection('journal');MobileNav.setActive(this)"><span class="tab-icon">📋</span><span>Journal</span></button>
   <button class="tab-btn" onclick="Nav.showSection('coach-history');MobileNav.setActive(this)"><span class="tab-icon">🤖</span><span>Coach</span></button>
   <button class="tab-btn" onclick="Nav.showSection('statistics');MobileNav.setActive(this)"><span class="tab-icon">📈</span><span>Stats</span></button>
+  <button class="tab-btn" onclick="document.getElementById('settings-modal').classList.add('active')"><span class="tab-icon">⚙️</span><span>Settings</span></button>
 </div>
 </body>
 </html>
