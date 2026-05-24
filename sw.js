@@ -1,4 +1,4 @@
-const CACHE = 'tj-v7';
+const CACHE = 'tj-v8';
 const CORE = ['./', './index.html', './trading-journal.html'];
 const OPTIONAL = [
     'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js',
