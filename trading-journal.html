@@ -37,11 +37,6 @@ body{background:var(--bg-primary);color:var(--text-primary);font-family:-apple-s
 .journal-btn.live.active{background:rgba(0,255,136,.15);border-color:var(--accent-green);color:var(--accent-green)}
 .journal-btn.paper.active{background:rgba(0,212,255,.15);border-color:var(--accent-cyan);color:var(--accent-cyan)}
 .journal-btn:hover{border-color:var(--accent-cyan);color:var(--text-primary)}
-#mobile-journal-switcher{display:none}
-@media(max-width:768px){
-  #mobile-journal-switcher{display:flex;gap:8px;padding:8px 0 6px;margin-bottom:4px}
-  #main-content{padding-top:calc(12px + env(safe-area-inset-top,44px))!important}
-}
 #main-content{margin-left:260px;padding:24px;flex:1;min-height:100vh}
 .section-hidden{display:none!important}
 section{margin-bottom:32px}
@@ -175,11 +170,6 @@ canvas{max-height:300px}
 .cal-summary-val{font-size:20px;font-weight:700}
 .cal-summary-lbl{font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px}
 @media(max-width:1024px){.chart-grid{grid-template-columns:1fr}.screenshot-layout{grid-template-columns:1fr}.cal-grid{grid-template-columns:repeat(7,1fr)}}
-#mobile-tab-bar{display:none;position:fixed;bottom:0;left:0;right:0;height:calc(62px + env(safe-area-inset-bottom,0px));padding-bottom:env(safe-area-inset-bottom,0px);background:var(--bg-secondary);border-top:1px solid var(--border);z-index:200;align-items:center;justify-content:space-around;padding-left:4px;padding-right:4px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
-@media(max-width:768px){#sidebar{display:none}#main-content{margin-left:0;padding:12px;padding-bottom:calc(80px + env(safe-area-inset-bottom,0px))}.stat-cards{grid-template-columns:1fr 1fr}#mobile-tab-bar{display:flex}}
-.tab-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:8px 4px;border:none;background:none;color:var(--text-secondary);font-size:10px;cursor:pointer;border-radius:10px;transition:color .2s;letter-spacing:.3px}
-.tab-btn.active{color:var(--accent-cyan)}
-.tab-icon{font-size:22px;line-height:1}
 #daily-limit-banner{display:none;background:rgba(255,77,109,.15);border-bottom:3px solid var(--accent-red);padding:12px 24px;color:var(--accent-red);font-weight:600;font-size:14px;position:sticky;top:0;z-index:50;align-items:center;justify-content:space-between}
 #daily-limit-banner.active{display:flex}
 .coach-section-title.ib{color:#f59e0b}
@@ -251,10 +241,6 @@ body.theme-iphone .journal-btn.paper.active{background:rgba(0,122,255,.15);borde
 </div>
 </aside>
 <main id="main-content">
-<div id="mobile-journal-switcher">
-  <button class="journal-btn live" id="mob-btn-live" onclick="App.switchJournal('live')">🟢 Live</button>
-  <button class="journal-btn paper" id="mob-btn-paper" onclick="App.switchJournal('paper')">📄 Paper</button>
-</div>
 <div id="daily-limit-banner">
 <span id="daily-limit-msg"></span>
 <button onclick="DailyLimit.dismiss()" style="background:none;border:1px solid var(--accent-red);color:var(--accent-red);padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px">Dismiss</button>
@@ -1558,8 +1544,6 @@ const App={
         document.getElementById('btn-journal-live').classList.toggle('active',journal==='live');
         document.getElementById('btn-journal-paper').classList.toggle('active',journal==='paper');
         document.querySelector('.sidebar-logo').textContent=journal==='live'?'📊 Trading Journal — LIVE':'📊 Trading Journal — PAPER';
-        const ml=document.getElementById('mob-btn-live');const mp=document.getElementById('mob-btn-paper');
-        if(ml&&mp){ml.classList.toggle('active',journal==='live');mp.classList.toggle('active',journal==='paper');}
     },
     switchJournal(journal){
         Storage.setJournal(journal);
@@ -2131,20 +2115,10 @@ const Confetti={
     }
 };
 
-const MobileNav={
-    setActive(btn){document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');}
-};
+
 
 App.init();
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
-<div id="mobile-tab-bar">
-  <button class="tab-btn active" onclick="Nav.showSection('overview');MobileNav.setActive(this)"><span class="tab-icon">📊</span><span>Overview</span></button>
-  <button class="tab-btn" onclick="Nav.showSection('trade-entry');MobileNav.setActive(this)"><span class="tab-icon">➕</span><span>Add Trade</span></button>
-  <button class="tab-btn" onclick="Nav.showSection('journal');MobileNav.setActive(this)"><span class="tab-icon">📋</span><span>Journal</span></button>
-  <button class="tab-btn" onclick="Nav.showSection('coach-history');MobileNav.setActive(this)"><span class="tab-icon">🤖</span><span>Coach</span></button>
-  <button class="tab-btn" onclick="Nav.showSection('statistics');MobileNav.setActive(this)"><span class="tab-icon">📈</span><span>Stats</span></button>
-  <button class="tab-btn" onclick="document.getElementById('settings-modal').classList.add('active')"><span class="tab-icon">⚙️</span><span>Settings</span></button>
-</div>
 </body>
 </html>
