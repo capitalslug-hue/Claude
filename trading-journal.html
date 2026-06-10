@@ -473,6 +473,11 @@ body.theme-iphone .journal-btn.paper.active{background:rgba(0,122,255,.15);borde
 <small style="color:var(--text-secondary);margin-top:6px;display:block">Optional. Get free key at <a href="https://finnhub.io/register" target="_blank" style="color:var(--accent-cyan);text-decoration:none">finnhub.io/register</a>. Stored locally in your browser only.</small>
 </div>
 <div class="form-group">
+<label>Edgeful API Key (for Edge Stats)</label>
+<input type="password" id="settings-edgeful-key" class="api-key-input" placeholder="ef_live_...">
+<small style="color:var(--text-secondary);margin-top:6px;display:block">Optional. Get key at <a href="https://edgeful.com" target="_blank" style="color:var(--accent-cyan);text-decoration:none">edgeful.com</a>. Stored locally in your browser only.</small>
+</div>
+<div class="form-group">
 <label>Daily Loss Limit ($) — 0 = disabled</label>
 <input type="number" id="settings-daily-limit" step="1" min="0" placeholder="e.g. 150">
 <small style="color:var(--text-secondary);margin-top:6px;display:block">A warning banner appears when today's total loss exceeds this amount.</small>
@@ -691,10 +696,11 @@ const FirebaseSync = {
 };
 
 const Settings = {
-    load(){return{apiKey:localStorage.getItem('tjd_api_key')||'',autoCoach:localStorage.getItem('tjd_auto_coach')||'yes',finnhubKey:localStorage.getItem('tjd_finnhub_key')||'',dailyLossLimit:localStorage.getItem('tjd_daily_loss_limit')||'0'}},
-    save(s){localStorage.setItem('tjd_api_key',s.apiKey);localStorage.setItem('tjd_auto_coach',s.autoCoach);localStorage.setItem('tjd_finnhub_key',s.finnhubKey||'');localStorage.setItem('tjd_daily_loss_limit',s.dailyLossLimit||'0');},
+    load(){return{apiKey:localStorage.getItem('tjd_api_key')||'',autoCoach:localStorage.getItem('tjd_auto_coach')||'yes',finnhubKey:localStorage.getItem('tjd_finnhub_key')||'',edgefulKey:localStorage.getItem('tjd_edgeful_key')||'',dailyLossLimit:localStorage.getItem('tjd_daily_loss_limit')||'0'}},
+    save(s){localStorage.setItem('tjd_api_key',s.apiKey);localStorage.setItem('tjd_auto_coach',s.autoCoach);localStorage.setItem('tjd_finnhub_key',s.finnhubKey||'');localStorage.setItem('tjd_edgeful_key',s.edgefulKey||'');localStorage.setItem('tjd_daily_loss_limit',s.dailyLossLimit||'0');},
     getApiKey(){return localStorage.getItem('tjd_api_key')||''},
-    getFinnhubKey(){return localStorage.getItem('tjd_finnhub_key')||''}
+    getFinnhubKey(){return localStorage.getItem('tjd_finnhub_key')||''},
+    getEdgefulKey(){return localStorage.getItem('tjd_edgeful_key')||''}
 };
 
 const Storage = {
@@ -1538,6 +1544,7 @@ const App={
         if(s.apiKey){document.getElementById('settings-api-key').value=s.apiKey;}
         document.getElementById('settings-auto-coach').value=s.autoCoach;
         if(s.finnhubKey){document.getElementById('settings-finnhub-key').value=s.finnhubKey;}
+        if(s.edgefulKey){document.getElementById('settings-edgeful-key').value=s.edgefulKey;}
         document.getElementById('settings-daily-limit').value=s.dailyLossLimit||'0';
     },
     updateJournalUI(journal){
@@ -1575,7 +1582,7 @@ const App={
             FirebaseSync._updateStatusBadge();
         });
         document.getElementById('save-settings-btn').addEventListener('click',()=>{
-            Settings.save({apiKey:document.getElementById('settings-api-key').value.trim(),autoCoach:document.getElementById('settings-auto-coach').value,finnhubKey:document.getElementById('settings-finnhub-key').value.trim(),dailyLossLimit:document.getElementById('settings-daily-limit').value||'0'});
+            Settings.save({apiKey:document.getElementById('settings-api-key').value.trim(),autoCoach:document.getElementById('settings-auto-coach').value,finnhubKey:document.getElementById('settings-finnhub-key').value.trim(),edgefulKey:document.getElementById('settings-edgeful-key').value.trim(),dailyLossLimit:document.getElementById('settings-daily-limit').value||'0'});
             FirebaseSync.saveConfig({syncId:document.getElementById('settings-sync-id').value.trim(),apiKey:document.getElementById('settings-fb-api-key').value.trim(),projectId:document.getElementById('settings-fb-project-id').value.trim(),appId:document.getElementById('settings-fb-app-id').value.trim()});
             FirebaseSync.restart();
             setTimeout(()=>FirebaseSync.pushPrefs(),2000);
@@ -2035,7 +2042,9 @@ const News = {
         }else{
             html+='<div style="font-size:13px;color:var(--text-secondary)">Enable Finnhub API key in Settings to see pre-market data</div>';
         }
-        html+='</div></div></div>';
+        html+='</div></div>';
+        html+=await Edgeful.getCardHTML('ES');
+        html+='</div>';
         return html;
     },
     renderAsiaBrief(){
@@ -2061,11 +2070,72 @@ const News = {
     bindEvents(){
         document.getElementById('toggle-morning')?.addEventListener('click',()=>this.toggleSession('morning'));
         document.getElementById('toggle-asia')?.addEventListener('click',()=>this.toggleSession('asia'));
-        document.getElementById('refresh-news')?.addEventListener('click',()=>this.renderContent());
+        document.getElementById('refresh-news')?.addEventListener('click',()=>{Edgeful._cache={};this.renderContent();});
     },
     init(){
         this.bindEvents();
         this.renderContent();
+    }
+};
+
+const Edgeful={
+    _cache:{},
+    _dateRange(){
+        const end=new Date();
+        const start=new Date(end);
+        start.setMonth(start.getMonth()-6);
+        const fmt=d=>d.toISOString().split('T')[0];
+        return{start:fmt(start),end:fmt(end)};
+    },
+    async _fetch(path,params=''){
+        const key=Settings.getEdgefulKey();
+        if(!key)return null;
+        const cacheKey=path+params;
+        if(this._cache[cacheKey])return this._cache[cacheKey];
+        try{
+            const res=await fetch(`https://api.edgeful.com${path}${params}`,{headers:{'Authorization':`Bearer ${key}`}});
+            if(!res.ok)return null;
+            const data=await res.json();
+            this._cache[cacheKey]=data;
+            return data;
+        }catch(e){return null;}
+    },
+    async fetchGapFill(ticker='ES'){
+        const{start,end}=this._dateRange();
+        return this._fetch(`/report_calculation/gap-fill-standard/futures/${ticker}`,`?start_date=${start}&end_date=${end}`);
+    },
+    async fetchORB(ticker='ES'){
+        const{start,end}=this._dateRange();
+        return this._fetch(`/intraday_calculation/opening-range-breakout-standard/futures/${ticker}`,`?start_date=${start}&end_date=${end}&start_time=09:30:00&end_time=16:00:00&timezone=America/New_York`);
+    },
+    async fetchIB(ticker='ES'){
+        const{start,end}=this._dateRange();
+        return this._fetch(`/intraday_calculation/initial-balance-breakout-standard/futures/${ticker}`,`?start_date=${start}&end_date=${end}&start_time=09:30:00&end_time=16:00:00&timezone=America/New_York`);
+    },
+    _pct(val){return val!=null?`${(+val*100).toFixed(0)}%`:'—';},
+    _findField(obj,...keys){for(const k of keys){const v=obj?.[k]??obj?.summary?.[k];if(v!=null)return v;}return null;},
+    renderCard(gapFill,orb,ib){
+        let html=`<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:16px;margin-top:16px">`;
+        html+=`<div style="font-size:12px;font-weight:600;color:var(--accent-cyan);margin-bottom:12px">📈 EDGE STATS (ES — 6 MO)</div>`;
+        html+=`<div style="display:grid;gap:10px">`;
+        const gfRate=this._findField(gapFill,'fill_rate','gap_fill_rate','fillRate');
+        html+=`<div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text-secondary)">Gap Fill</span><strong style="color:${gfRate!=null&&gfRate>=0.6?'var(--accent-green)':'var(--accent-red)'}">${this._pct(gfRate)}</strong></div>`;
+        const orbUp=this._findField(orb,'breakout_up_rate','up_rate','bullish_rate');
+        const orbDn=this._findField(orb,'breakout_down_rate','down_rate','bearish_rate');
+        html+=`<div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text-secondary)">ORB 15m ▲&nbsp;/&nbsp;▼</span><strong>${this._pct(orbUp)}&nbsp;/&nbsp;${this._pct(orbDn)}</strong></div>`;
+        const ibBrk=this._findField(ib,'breakout_rate','break_rate','both_broken_rate');
+        html+=`<div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text-secondary)">IB Breakout</span><strong>${this._pct(ibBrk)}</strong></div>`;
+        html+=`</div></div>`;
+        return html;
+    },
+    async getCardHTML(ticker='ES'){
+        if(!Settings.getEdgefulKey())return`<div style="font-size:13px;color:var(--text-secondary);margin-top:12px">Add Edgeful API key in Settings for edge stats</div>`;
+        const gapFill=await this.fetchGapFill(ticker);
+        await new Promise(r=>setTimeout(r,300));
+        const orb=await this.fetchORB(ticker);
+        await new Promise(r=>setTimeout(r,300));
+        const ib=await this.fetchIB(ticker);
+        return this.renderCard(gapFill,orb,ib);
     }
 };
 
