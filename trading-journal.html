@@ -2112,19 +2112,33 @@ const Edgeful={
         const{start,end}=this._dateRange();
         return this._fetch(`/intraday_calculation/initial-balance-breakout-standard/futures/${ticker}`,`?start_date=${start}&end_date=${end}&start_time=09:30:00&end_time=16:00:00&timezone=America/New_York`);
     },
-    _pct(val){return val!=null?`${(+val*100).toFixed(0)}%`:'—';},
-    _findField(obj,...keys){for(const k of keys){const v=obj?.[k]??obj?.summary?.[k];if(v!=null)return v;}return null;},
+    _pct(val){return val!=null&&!isNaN(val)?`${Math.round(val)}%`:'—';},
+    _gapCat(gapFill,category){
+        if(!Array.isArray(gapFill?.summary))return null;
+        const row=gapFill.summary.find(r=>r.category===category);
+        return row?row.percentage:null;
+    },
     renderCard(gapFill,orb,ib){
         let html=`<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:16px;margin-top:16px">`;
         html+=`<div style="font-size:12px;font-weight:600;color:var(--accent-cyan);margin-bottom:12px">📈 EDGE STATS (ES — 6 MO)</div>`;
         html+=`<div style="display:grid;gap:10px">`;
-        const gfRate=this._findField(gapFill,'fill_rate','gap_fill_rate','fillRate');
-        html+=`<div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text-secondary)">Gap Fill</span><strong style="color:${gfRate!=null&&gfRate>=0.6?'var(--accent-green)':'var(--accent-red)'}">${this._pct(gfRate)}</strong></div>`;
-        const orbUp=this._findField(orb,'breakout_up_rate','up_rate','bullish_rate');
-        const orbDn=this._findField(orb,'breakout_down_rate','down_rate','bearish_rate');
-        html+=`<div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text-secondary)">ORB 15m ▲&nbsp;/&nbsp;▼</span><strong>${this._pct(orbUp)}&nbsp;/&nbsp;${this._pct(orbDn)}</strong></div>`;
-        const ibBrk=this._findField(ib,'breakout_rate','break_rate','both_broken_rate');
-        html+=`<div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text-secondary)">IB Breakout</span><strong>${this._pct(ibBrk)}</strong></div>`;
+        // Gap fill — probability a gap fills, by direction
+        const gapUpFill=this._gapCat(gapFill,'gap up filled');
+        const gapDnFill=this._gapCat(gapFill,'gap down filled');
+        html+=`<div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text-secondary)">Gap Fill ▲&nbsp;/&nbsp;▼</span><strong>${this._pct(gapUpFill)}&nbsp;/&nbsp;${this._pct(gapDnFill)}</strong></div>`;
+        // ORB — probability price breaks the opening range above / below (incl. double breaks)
+        const o=orb?.summary;
+        let orbUp=null,orbDn=null;
+        if(o&&o.totalDays){
+            orbUp=((o.priceBreakAboveCount+o.doubleBreakOccurred)/o.totalDays)*100;
+            orbDn=((o.priceBreakBelowCount+o.doubleBreakOccurred)/o.totalDays)*100;
+        }
+        html+=`<div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text-secondary)">ORB Break ▲&nbsp;/&nbsp;▼</span><strong>${this._pct(orbUp)}&nbsp;/&nbsp;${this._pct(orbDn)}</strong></div>`;
+        // IB — probability the initial balance breaks in at least one direction
+        const ibS=ib?.summary,ibTotal=ib?.totalDays;
+        let ibBrk=null;
+        if(ibS&&ibTotal){ibBrk=((ibS.singleBreak+ibS.bothBroken)/ibTotal)*100;}
+        html+=`<div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text-secondary)">IB Breakout</span><strong style="color:${ibBrk!=null&&ibBrk>=60?'var(--accent-green)':'var(--text-primary)'}">${this._pct(ibBrk)}</strong></div>`;
         html+=`</div></div>`;
         return html;
     },
