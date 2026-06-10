@@ -2,8 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Trading Journal Dashboard</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0d0f18" id="meta-theme-color">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TJ Dashboard">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -39,6 +44,8 @@ h2{font-size:20px;margin-bottom:16px;color:var(--text-primary)}
 .stat-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px}
 .stat-card{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:16px 16px 14px;transition:all .2s;position:relative;overflow:hidden}
 .stat-card:hover{background:var(--bg-card-hover);transform:translateY(-2px);box-shadow:0 4px 20px rgba(0,0,0,.3)}
+.stat-card::before{content:'';position:absolute;inset:0;border-radius:inherit;background:linear-gradient(135deg,rgba(255,255,255,.06) 0%,rgba(255,255,255,0) 60%);opacity:0;transition:opacity .3s;pointer-events:none}
+.stat-card:hover::before{opacity:1}
 .stat-card-icon{font-size:22px;margin-bottom:8px;display:block;line-height:1}
 .stat-card-accent{position:absolute;top:0;left:0;width:3px;height:100%;border-radius:10px 0 0 10px}
 .stat-value{font-size:22px;font-weight:700;margin-bottom:4px;line-height:1.2}
@@ -163,7 +170,6 @@ canvas{max-height:300px}
 .cal-summary-val{font-size:20px;font-weight:700}
 .cal-summary-lbl{font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px}
 @media(max-width:1024px){.chart-grid{grid-template-columns:1fr}.screenshot-layout{grid-template-columns:1fr}.cal-grid{grid-template-columns:repeat(7,1fr)}}
-@media(max-width:768px){#sidebar{width:100%;height:auto;position:static;border-right:none;border-bottom:1px solid var(--border)}#main-content{margin-left:0;padding:12px}.stat-cards{grid-template-columns:1fr 1fr}}
 #daily-limit-banner{display:none;background:rgba(255,77,109,.15);border-bottom:3px solid var(--accent-red);padding:12px 24px;color:var(--accent-red);font-weight:600;font-size:14px;position:sticky;top:0;z-index:50;align-items:center;justify-content:space-between}
 #daily-limit-banner.active{display:flex}
 .coach-section-title.ib{color:#f59e0b}
@@ -175,12 +181,39 @@ body.theme-tradezella .stat-card:hover{border-color:rgba(139,92,246,.5);box-shad
 body.theme-tradezella .stat-value{font-size:26px}
 body.theme-tradezella .sidebar-logo{background:linear-gradient(135deg,#8b5cf6,#10b981);background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent}
 body.theme-tradezella .coach-panel{border-color:#8b5cf6;background:linear-gradient(135deg,#0f0f20,#1a1a35)}
+/* iPhone light theme */
+body.theme-iphone .sidebar-logo{background:linear-gradient(135deg,#007aff,#34c759);background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+body.theme-iphone .nav-btn{border-radius:10px;margin:2px 8px;width:calc(100% - 16px)}
+body.theme-iphone .nav-btn.active{background:rgba(0,122,255,.1);color:#007aff;border-left:none;padding-left:20px}
+body.theme-iphone .stat-card{border-radius:13px;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+body.theme-iphone .stat-card:hover{box-shadow:0 4px 12px rgba(0,122,255,.15);transform:translateY(-1px)}
+body.theme-iphone .trade-table{border-radius:13px}
+body.theme-iphone input,body.theme-iphone select,body.theme-iphone textarea{background:#f2f2f7;border-color:#e5e5ea}
+body.theme-iphone .badge.win{background:rgba(52,199,89,.15)}
+body.theme-iphone .badge.loss{background:rgba(255,59,48,.15)}
+body.theme-iphone .coach-panel{background:#fff;border-color:#007aff}
+body.theme-iphone .journal-btn.live.active{background:rgba(52,199,89,.15);border-color:#34c759;color:#34c759}
+body.theme-iphone .journal-btn.paper.active{background:rgba(0,122,255,.15);border-color:#007aff;color:#007aff}
+/* Day/Night toggle */
+.day-night-toggle{display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 12px 0}
+.dn-label{font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;user-select:none}
+.dn-switch{position:relative;display:inline-block;width:44px;height:24px;cursor:pointer;flex-shrink:0}
+.dn-switch input{opacity:0;width:0;height:0;position:absolute}
+.dn-track{position:absolute;inset:0;background:var(--border);border-radius:12px;transition:background .25s}
+.dn-thumb{position:absolute;top:3px;left:3px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform .25s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+#dn-checkbox:checked~.dn-track{background:var(--accent-cyan)}
+#dn-checkbox:checked~.dn-track .dn-thumb{transform:translateX(20px)}
 </style>
 </head>
 <body>
 <div id="app">
 <aside id="sidebar">
 <div class="sidebar-logo">📊 Trading Journal</div>
+<div class="day-night-toggle">
+<span class="dn-label">Dark</span>
+<label class="dn-switch"><input type="checkbox" id="dn-checkbox"><span class="dn-track"><span class="dn-thumb"></span></span></label>
+<span class="dn-label">Light</span>
+</div>
 <div class="journal-switcher">
 <button class="journal-btn live active" id="btn-journal-live">🟢 Live</button>
 <button class="journal-btn paper" id="btn-journal-paper">📄 Paper</button>
@@ -267,7 +300,7 @@ body.theme-tradezella .coach-panel{border-color:#8b5cf6;background:linear-gradie
 <div class="coach-panel" id="coach-panel">
 <div class="coach-header">
 <div class="coach-avatar">🤖</div>
-<div><div class="coach-title">AI Trading Coach</div><div class="coach-subtitle">SMC Analysis</div></div>
+<div><div class="coach-title">AI Trading Coach</div><div class="coach-subtitle">IB/IBB Analysis</div></div>
 </div>
 <div id="coach-content"></div>
 </div>
@@ -440,6 +473,11 @@ body.theme-tradezella .coach-panel{border-color:#8b5cf6;background:linear-gradie
 <small style="color:var(--text-secondary);margin-top:6px;display:block">Optional. Get free key at <a href="https://finnhub.io/register" target="_blank" style="color:var(--accent-cyan);text-decoration:none">finnhub.io/register</a>. Stored locally in your browser only.</small>
 </div>
 <div class="form-group">
+<label>Edgeful API Key (for Edge Stats)</label>
+<input type="password" id="settings-edgeful-key" class="api-key-input" placeholder="ef_live_...">
+<small style="color:var(--text-secondary);margin-top:6px;display:block">Optional. Get key at <a href="https://edgeful.com" target="_blank" style="color:var(--accent-cyan);text-decoration:none">edgeful.com</a>. Stored locally in your browser only.</small>
+</div>
+<div class="form-group">
 <label>Daily Loss Limit ($) — 0 = disabled</label>
 <input type="number" id="settings-daily-limit" step="1" min="0" placeholder="e.g. 150">
 <small style="color:var(--text-secondary);margin-top:6px;display:block">A warning banner appears when today's total loss exceeds this amount.</small>
@@ -467,6 +505,10 @@ body.theme-tradezella .coach-panel{border-color:#8b5cf6;background:linear-gradie
   <div class="theme-dots"><div class="theme-dot" style="background:#0d0f18;border:1px solid #444"></div><div class="theme-dot" style="background:#8b5cf6"></div><div class="theme-dot" style="background:#10b981"></div></div>
   <span class="theme-name">Tradezella</span>
 </div>
+<div class="theme-swatch" data-theme="iphone" onclick="Themes.apply('iphone')">
+  <div class="theme-dots"><div class="theme-dot" style="background:#f2f2f7;border:1px solid #ccc"></div><div class="theme-dot" style="background:#007aff"></div><div class="theme-dot" style="background:#34c759"></div></div>
+  <span class="theme-name">iPhone</span>
+</div>
 </div>
 </div>
 <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
@@ -489,6 +531,13 @@ body.theme-tradezella .coach-panel{border-color:#8b5cf6;background:linear-gradie
 <input type="password" id="settings-fb-app-id" class="api-key-input" placeholder="1:123456789:web:abc123...">
 </div>
 <div id="sync-status-badge" style="font-size:12px;padding:8px;border-radius:4px;background:var(--bg-secondary);color:var(--text-secondary);margin-top:4px">Sync: Not configured</div>
+<button class="btn-secondary" id="copy-config-code-btn" style="margin-top:8px;width:100%;font-size:12px">📋 Copy Config Code</button>
+<small style="color:var(--text-secondary);margin-top:4px;display:block">Copy this on desktop, then paste it in the "Import Config Code" field on your phone <strong>inside the app</strong> (not in Safari).</small>
+<div class="form-group" style="margin-top:10px">
+  <label>Import Config Code (paste from desktop)</label>
+  <input type="text" id="settings-config-import" placeholder="Paste config code here…" style="font-family:monospace;font-size:11px">
+  <button class="btn-secondary" id="import-config-btn" style="margin-top:6px;width:100%;font-size:12px">✅ Apply Config Code</button>
+</div>
 <div style="margin-top:10px;font-size:12px;color:var(--text-muted)">
 Setup: <a href="https://console.firebase.google.com" target="_blank" style="color:var(--accent-cyan);text-decoration:none">console.firebase.google.com</a> → New project → Add Web App → Enable Firestore (test mode) → paste the 3 values above.
 </div>
@@ -584,6 +633,7 @@ const FirebaseSync = {
                 }
             }catch(e){console.warn('Initial sync failed for',journal,e);}
         }
+        await this.pullPrefs();
         App.update();
     },
     _tradesDoc(journal){
@@ -623,6 +673,20 @@ const FirebaseSync = {
     },
     stop(){this._unsubs.forEach(fn=>fn());this._unsubs=[];this._initialized=false;this.db=null;},
     restart(){this.stop();this.init();},
+    _prefsDoc(){return this.db.collection('prefs').doc(this.getConfig().syncId);},
+    async pushPrefs(){
+        if(!this._initialized)return;
+        const prefs={theme:localStorage.getItem('tjd_theme')||'iphone',autoCoach:localStorage.getItem('tjd_auto_coach')||'yes',dailyLossLimit:localStorage.getItem('tjd_daily_loss_limit')||'0'};
+        await this._prefsDoc().set(prefs).catch(()=>{});
+    },
+    async pullPrefs(){
+        const snap=await this._prefsDoc().get().catch(()=>null);
+        if(!snap||!snap.exists)return;
+        const p=snap.data();
+        if(p.theme){localStorage.setItem('tjd_theme',p.theme);Themes.apply(p.theme);}
+        if(p.autoCoach)localStorage.setItem('tjd_auto_coach',p.autoCoach);
+        if(p.dailyLossLimit)localStorage.setItem('tjd_daily_loss_limit',p.dailyLossLimit);
+    },
     _updateStatusBadge(){
         const badge=document.getElementById('sync-status-badge');
         if(!badge)return;
@@ -632,10 +696,11 @@ const FirebaseSync = {
 };
 
 const Settings = {
-    load(){return{apiKey:localStorage.getItem('tjd_api_key')||'',autoCoach:localStorage.getItem('tjd_auto_coach')||'yes',finnhubKey:localStorage.getItem('tjd_finnhub_key')||'',dailyLossLimit:localStorage.getItem('tjd_daily_loss_limit')||'0'}},
-    save(s){localStorage.setItem('tjd_api_key',s.apiKey);localStorage.setItem('tjd_auto_coach',s.autoCoach);localStorage.setItem('tjd_finnhub_key',s.finnhubKey||'');localStorage.setItem('tjd_daily_loss_limit',s.dailyLossLimit||'0');},
+    load(){return{apiKey:localStorage.getItem('tjd_api_key')||'',autoCoach:localStorage.getItem('tjd_auto_coach')||'yes',finnhubKey:localStorage.getItem('tjd_finnhub_key')||'',edgefulKey:localStorage.getItem('tjd_edgeful_key')||'',dailyLossLimit:localStorage.getItem('tjd_daily_loss_limit')||'0'}},
+    save(s){localStorage.setItem('tjd_api_key',s.apiKey);localStorage.setItem('tjd_auto_coach',s.autoCoach);localStorage.setItem('tjd_finnhub_key',s.finnhubKey||'');localStorage.setItem('tjd_edgeful_key',s.edgefulKey||'');localStorage.setItem('tjd_daily_loss_limit',s.dailyLossLimit||'0');},
     getApiKey(){return localStorage.getItem('tjd_api_key')||''},
-    getFinnhubKey(){return localStorage.getItem('tjd_finnhub_key')||''}
+    getFinnhubKey(){return localStorage.getItem('tjd_finnhub_key')||''},
+    getEdgefulKey(){return localStorage.getItem('tjd_edgeful_key')||''}
 };
 
 const Storage = {
@@ -906,6 +971,7 @@ const Navigation={
         }catch(e){}
     }
 };
+const Nav = Navigation;
 
 const Coach = {
     async analyze(trade, allTrades){
@@ -950,34 +1016,34 @@ setupType must be one of: "inside_bar", "ib_breakout", "gold_asia", "mixed", "ot
 
 Tone: 70% encouraging, 30% honest and blunt. Be specific to THIS trade and THIS setup type.`;
 
-        try{
-            const res=await fetch('https://api.anthropic.com/v1/messages',{
-                method:'POST',
-                headers:{
-                    'Content-Type':'application/json',
-                    'x-api-key':apiKey,
-                    'anthropic-version':'2023-06-01',
-                    'anthropic-dangerous-direct-browser-access':'true'
-                },
-                body:JSON.stringify({
-                    model:'claude-sonnet-4-6',
-                    max_tokens:1000,
-                    messages:[{role:'user',content:prompt}]
-                })
-            });
-            if(!res.ok){const e=await res.json();throw new Error(e.error?.message||'API error');}
-            const data=await res.json();
-            const text=data.content[0].text.trim();
-            return JSON.parse(text);
-        }catch(e){
-            console.error('Coach error:',e);
-            return{score:0,error:e.message};
+        this._lastTrade=trade;this._lastAllTrades=allTrades;
+        const reqBody=JSON.stringify({model:'claude-opus-4-7',max_tokens:1000,messages:[{role:'user',content:prompt}]});
+        const reqHeaders={'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'};
+        let lastErr;
+        for(let attempt=0;attempt<3;attempt++){
+            if(attempt>0)await new Promise(r=>setTimeout(r,attempt*3000));
+            try{
+                const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:reqHeaders,body:reqBody});
+                if(res.status===529){lastErr='overloaded';continue;}
+                if(!res.ok){const e=await res.json();throw new Error(e.error?.message||'API error');}
+                const data=await res.json();
+                const raw=data.content[0].text.trim().replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,'');
+                return JSON.parse(raw);
+            }catch(e){
+                if(lastErr==='overloaded')continue;
+                console.error('Coach error:',e);
+                return{score:0,error:e.message};
+            }
         }
+        return{score:0,error:'overloaded',retryable:true};
     },
 
     renderFeedback(fb, container){
         if(fb.error){
-            container.innerHTML=`<div style="color:var(--accent-red);padding:12px">Coach error: ${fb.error}</div>`;
+            const isOverload=fb.error==='overloaded';
+            const msg=isOverload?'⏳ AI is temporarily busy. Please try again in a moment.':`Coach error: ${fb.error}`;
+            const btn=fb.retryable?`<br><button onclick="Coach.retry()" class="btn-secondary" style="margin-top:10px;font-size:12px">🔄 Try Again</button>`:'';
+            container.innerHTML=`<div style="color:${isOverload?'var(--accent-yellow)':'var(--accent-red)'};padding:12px">${msg}${btn}</div>`;
             return;
         }
         const scoreColor=fb.score>=7?'var(--accent-green)':fb.score>=5?'var(--accent-yellow)':'var(--accent-red)';
@@ -1042,6 +1108,15 @@ Tone: 70% encouraging, 30% honest and blunt. Be specific to THIS trade and THIS 
         const content=document.getElementById('coach-detail-content');
         this.renderFeedback(fb,content);
         modal.classList.add('active');
+    },
+    async retry(){
+        if(!this._lastTrade)return;
+        const panel=document.getElementById('coach-panel');
+        const content=document.getElementById('coach-content');
+        panel.classList.add('visible');
+        this.showSpinner(content);
+        const fb=await this.analyze(this._lastTrade,this._lastAllTrades||Storage.load());
+        if(fb){this.renderFeedback(fb,content);Storage.saveCoachFeedback(this._lastTrade.id,fb);}
     }
 };
 
@@ -1111,6 +1186,7 @@ const Form={
         const trade={...fd,id:`${Date.now()}-${Math.random().toString(36).substr(2,5)}`,...calc,rating:rated.rating,ratingFeedback:rated.feedback,importSource:'manual'};
         let trades=Storage.load();trades.push(trade);Storage.save(trades);
         Toast.show('Trade added!');
+        if(calc.result==='win')Confetti.burst(document.querySelector('#trade-entry .btn-primary'));
         document.getElementById('trade-form').reset();
         document.getElementById('form-date').valueAsDate=new Date();
         document.getElementById('form-point-value').value=CONTRACTS['MES'].pointValue;
@@ -1243,13 +1319,38 @@ const ScreenshotImport={
         const status=document.getElementById('vision-status');
         status.innerHTML='<span style="color:var(--accent-cyan)">🤖 AI is reading your screenshot...</span>';
         const base64=dataUrl.split(',')[1];
-        const prompt='Extract trade details from this trading screenshot. Return ONLY valid JSON (no markdown) with these fields (use null if not visible): {"contract":"MES","direction":"long","entryPrice":5100.25,"exitPrice":5115.50,"numContracts":2,"stopLoss":5090.00,"takeProfit":5130.00,"strategy":"breakout","notes":"","accountBalance":50000.00}. Contract must be one of: MES, MNQ, MCL, MGC, ES, NQ, CL, GC. For accountBalance, look for any visible account balance, total equity, or net liquidation value. Be precise with prices.';
+        const prompt=`This is a TradingView trading screenshot. Extract trade details and return ONLY valid JSON (no markdown).
+
+THE SCREENSHOT MAY BE ONE OF TWO TYPES:
+
+TYPE A — Order ticket / position panel / trade history (cleanest source):
+- Entry price: "Avg Price", "Filled", "Entry", "Open Price"
+- Stop Loss: "Stop", "SL", "Stop Loss" WITH an actual price number
+- Take Profit: "Limit", "TP", "Take Profit" WITH an actual price number
+- Exit price: "Close Price", "Exit", "Avg Exit"
+- Quantity: "Qty", "Contracts", "Size"
+
+TYPE B — Chart with position lines drawn on it:
+- A horizontal line with a quantity badge (e.g. "5" or "-5") and a USD P&L amount IS an open position. The PRICE of that line is the entry/average price.
+- A NEGATIVE quantity (e.g. "-5") means a SHORT trade. A positive quantity means LONG.
+- "TP" and "SL" shown as small buttons next to a line are just UI controls — do NOT treat them as prices. Only report stopLoss/takeProfit if there is an actual labeled price line for them.
+- If multiple position lines exist, pick the one that has TP/SL controls or is closest to current price as the active trade.
+- Set stopLoss/takeProfit to null if no real price is visible — do NOT guess.
+
+COMMON FIELDS:
+- Direction: "Buy"/"Long"/positive qty = long; "Sell"/"Short"/negative qty = short
+- Symbol: Micro Gold Futures = MGC, Micro E-mini S&P = MES, Micro E-mini Nasdaq = MNQ, Micro Crude = MCL; /ES /NQ /CL /GC strip the slash
+
+Return this JSON (use null for anything not clearly visible — never guess a price):
+{"contract":"MGC","direction":"short","entryPrice":4528.2,"exitPrice":null,"numContracts":5,"stopLoss":null,"takeProfit":null,"strategy":null,"notes":null,"accountBalance":null}
+
+Contract must be one of: MES, MNQ, MCL, MGC, ES, NQ, CL, GC. Read every digit of every price carefully.`;
         try{
             const res=await fetch('https://api.anthropic.com/v1/messages',{
                 method:'POST',
                 headers:{'Content-Type':'application/json','x-api-key':Settings.getApiKey(),'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
                 body:JSON.stringify({
-                    model:'claude-sonnet-4-6',max_tokens:400,
+                    model:'claude-opus-4-7',max_tokens:600,
                     messages:[{role:'user',content:[
                         {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},
                         {type:'text',text:prompt}
@@ -1303,25 +1404,36 @@ const Dashboard={
         [...trades].sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(t=>{
             eq+=t.pnlDollar;if(eq>maxEq)maxEq=eq;const dd=maxEq-eq;if(dd>maxDD)maxDD=dd;
         });
+        const sorted=[...trades].sort((a,b)=>new Date(a.date)-new Date(b.date));
+        const last20=sorted.slice(-20);
+        let runPnL=0;const pnlSeries=last20.map(t=>{runPnL+=t.pnlDollar;return runPnL;});
+        const winSeries=last20.map(t=>t.result==='win'?1:0);
+        const rSeries=last20.map(t=>t.rMultiple);
         const stats=[
-            {label:'Total Trades',value:trades.length,icon:'📊',color:'#00d4ff'},
-            {label:'Win Rate',value:`${((wins.length/trades.length)*100).toFixed(1)}%`,icon:'🎯',color:'#00ff88'},
-            {label:'Net P&L',value:`$${totalPnL.toFixed(2)}`,icon:'💰',color:totalPnL>=0?'#00ff88':'#ff4d6d',valColor:totalPnL>=0?'#00ff88':'#ff4d6d'},
-            {label:'Avg Win',value:`$${avgWin}`,icon:'✅',color:'#00ff88',valColor:'#00ff88'},
-            {label:'Avg Loss',value:`$${avgLoss}`,icon:'❌',color:'#ff4d6d',valColor:'#ff4d6d'},
-            {label:'Profit Factor',value:pf,icon:'⚖️',color:'#ffd700'},
-            {label:'Avg R-Multiple',value:`${avgR}x`,icon:'📐',color:'#a78bfa'},
-            {label:'Best Trade',value:`$${best.pnlDollar.toFixed(2)}`,icon:'🚀',color:'#00ff88',valColor:'#00ff88'},
-            {label:'Worst Trade',value:`$${worst.pnlDollar.toFixed(2)}`,icon:'💥',color:'#ff4d6d',valColor:'#ff4d6d'},
-            {label:'Max Drawdown',value:`$${maxDD.toFixed(2)}`,icon:'📉',color:'#ff4d6d',valColor:'#ff4d6d'}
+            {label:'Total Trades',value:trades.length,numVal:trades.length,icon:'📊',color:'#00d4ff',fmt:v=>Math.round(v).toString()},
+            {label:'Win Rate',value:`${((wins.length/trades.length)*100).toFixed(1)}%`,numVal:(wins.length/trades.length)*100,icon:'🎯',color:'#00ff88',fmt:v=>v.toFixed(1)+'%',spark:winSeries,sparkColor:'#00ff88'},
+            {label:'Net P&L',value:`$${totalPnL.toFixed(2)}`,numVal:totalPnL,icon:'💰',color:totalPnL>=0?'#00ff88':'#ff4d6d',valColor:totalPnL>=0?'#00ff88':'#ff4d6d',fmt:v=>(v>=0?'$':'−$')+Math.abs(v).toFixed(2),spark:pnlSeries,sparkColor:totalPnL>=0?'#00ff88':'#ff4d6d'},
+            {label:'Avg Win',value:`$${avgWin}`,numVal:parseFloat(avgWin),icon:'✅',color:'#00ff88',valColor:'#00ff88',fmt:v=>'$'+Math.abs(v).toFixed(2)},
+            {label:'Avg Loss',value:`$${avgLoss}`,numVal:parseFloat(avgLoss),icon:'❌',color:'#ff4d6d',valColor:'#ff4d6d',fmt:v=>'$'+v.toFixed(2)},
+            {label:'Profit Factor',value:pf,numVal:pf==='—'?null:parseFloat(pf),icon:'⚖️',color:'#ffd700',fmt:v=>v.toFixed(2)},
+            {label:'Avg R-Multiple',value:`${avgR}x`,numVal:parseFloat(avgR),icon:'📐',color:'#a78bfa',fmt:v=>v.toFixed(2)+'x',spark:rSeries,sparkColor:'#a78bfa'},
+            {label:'Best Trade',value:`$${best.pnlDollar.toFixed(2)}`,numVal:best.pnlDollar,icon:'🚀',color:'#00ff88',valColor:'#00ff88',fmt:v=>'$'+v.toFixed(2)},
+            {label:'Worst Trade',value:`$${worst.pnlDollar.toFixed(2)}`,numVal:worst.pnlDollar,icon:'💥',color:'#ff4d6d',valColor:'#ff4d6d',fmt:v=>'$'+v.toFixed(2)},
+            {label:'Max Drawdown',value:`$${maxDD.toFixed(2)}`,numVal:maxDD,icon:'📉',color:'#ff4d6d',valColor:'#ff4d6d',fmt:v=>'$'+v.toFixed(2)}
         ];
-        document.getElementById('stat-cards').innerHTML=stats.map(s=>`
-        <div class="stat-card">
+        document.getElementById('stat-cards').innerHTML=stats.map((s,i)=>`
+        <div class="stat-card" id="sc-${i}">
           <div class="stat-card-accent" style="background:${s.color}"></div>
           <span class="stat-card-icon">${s.icon}</span>
-          <div class="stat-value" style="color:${s.valColor||'var(--text-primary)'}">${s.value}</div>
+          <div class="stat-value" id="scv-${i}" style="color:${s.valColor||'var(--text-primary)'}">${s.value}</div>
           <div class="stat-label">${s.label}</div>
+          ${s.spark?Sparkline.draw(s.spark,s.sparkColor):''}
         </div>`).join('');
+        stats.forEach((s,i)=>{
+            if(s.numVal==null||!s.fmt)return;
+            const el=document.getElementById('scv-'+i);
+            if(el)animateValue(el,s.numVal,s.fmt);
+        });
     }
 };
 
@@ -1432,6 +1544,7 @@ const App={
         if(s.apiKey){document.getElementById('settings-api-key').value=s.apiKey;}
         document.getElementById('settings-auto-coach').value=s.autoCoach;
         if(s.finnhubKey){document.getElementById('settings-finnhub-key').value=s.finnhubKey;}
+        if(s.edgefulKey){document.getElementById('settings-edgeful-key').value=s.edgefulKey;}
         document.getElementById('settings-daily-limit').value=s.dailyLossLimit||'0';
     },
     updateJournalUI(journal){
@@ -1469,12 +1582,34 @@ const App={
             FirebaseSync._updateStatusBadge();
         });
         document.getElementById('save-settings-btn').addEventListener('click',()=>{
-            Settings.save({apiKey:document.getElementById('settings-api-key').value.trim(),autoCoach:document.getElementById('settings-auto-coach').value,finnhubKey:document.getElementById('settings-finnhub-key').value.trim(),dailyLossLimit:document.getElementById('settings-daily-limit').value||'0'});
+            Settings.save({apiKey:document.getElementById('settings-api-key').value.trim(),autoCoach:document.getElementById('settings-auto-coach').value,finnhubKey:document.getElementById('settings-finnhub-key').value.trim(),edgefulKey:document.getElementById('settings-edgeful-key').value.trim(),dailyLossLimit:document.getElementById('settings-daily-limit').value||'0'});
             FirebaseSync.saveConfig({syncId:document.getElementById('settings-sync-id').value.trim(),apiKey:document.getElementById('settings-fb-api-key').value.trim(),projectId:document.getElementById('settings-fb-project-id').value.trim(),appId:document.getElementById('settings-fb-app-id').value.trim()});
             FirebaseSync.restart();
+            setTimeout(()=>FirebaseSync.pushPrefs(),2000);
             document.getElementById('settings-modal').classList.remove('active');
             DailyLimit.check(Storage.load());
             Toast.show('Settings saved!');
+        });
+        document.getElementById('copy-config-code-btn').addEventListener('click',()=>{
+            const cfg=FirebaseSync.getConfig();
+            if(!cfg.syncId){Toast.show('Save Firebase config first','error');return;}
+            const code=btoa(JSON.stringify(cfg));
+            if(navigator.clipboard){navigator.clipboard.writeText(code).then(()=>Toast.show('📋 Config code copied! Paste it in the app on your phone.'));}
+            else{prompt('Copy this config code:',code);}
+        });
+        document.getElementById('import-config-btn').addEventListener('click',()=>{
+            const code=document.getElementById('settings-config-import').value.trim();
+            if(!code){Toast.show('Paste a config code first','error');return;}
+            try{
+                const cfg=JSON.parse(atob(code));
+                FirebaseSync.saveConfig(cfg);
+                document.getElementById('settings-sync-id').value=cfg.syncId||'';
+                document.getElementById('settings-fb-api-key').value=cfg.apiKey||'';
+                document.getElementById('settings-fb-project-id').value=cfg.projectId||'';
+                document.getElementById('settings-fb-app-id').value=cfg.appId||'';
+                document.getElementById('settings-config-import').value='';
+                Toast.show('Config applied — tap Save Settings to connect');
+            }catch(e){Toast.show('Invalid config code','error');}
         });
         document.querySelectorAll('.modal-close').forEach(btn=>{
             btn.addEventListener('click',e=>{e.target.closest('.modal-overlay').classList.remove('active');});
@@ -1487,6 +1622,7 @@ const App={
         document.getElementById('export-json-btn').addEventListener('click',()=>DataIO.exportJSON());
         document.getElementById('restore-json-btn').addEventListener('click',()=>document.getElementById('restore-json-input').click());
         document.getElementById('restore-json-input').addEventListener('change',e=>{if(e.target.files[0])DataIO.importJSON(e.target.files[0]);e.target.value='';});
+        document.getElementById('dn-checkbox').addEventListener('change',()=>Themes.toggleDayNight());
     },
     update(){
         const trades=Storage.load();
@@ -1586,6 +1722,11 @@ const Themes = {
             '--bg-primary':'#0d0f18','--bg-secondary':'#13151f','--bg-card':'#1a1c28','--bg-card-hover':'#20223200',
             '--border':'#2e3148','--accent-cyan':'#8b5cf6','--accent-green':'#10b981','--accent-red':'#f43f5e',
             '--accent-yellow':'#f59e0b','--text-primary':'#f1f5f9','--text-secondary':'#94a3b8','--text-muted':'#475569'
+        },
+        iphone:{
+            '--bg-primary':'#f2f2f7','--bg-secondary':'#ffffff','--bg-card':'#ffffff','--bg-card-hover':'#f9f9fb',
+            '--border':'#e5e5ea','--accent-cyan':'#007aff','--accent-green':'#34c759','--accent-red':'#ff3b30',
+            '--accent-yellow':'#ff9500','--text-primary':'#000000','--text-secondary':'#6d6d72','--text-muted':'#aeaeb2'
         }
     },
     apply(name){
@@ -1595,12 +1736,26 @@ const Themes = {
         document.body.className=document.body.className.replace(/theme-\w+/g,'').trim();
         document.body.classList.add('theme-'+name);
         localStorage.setItem('tjd_theme',name);
+        const mc=document.getElementById('meta-theme-color');
+        if(mc)mc.content=name==='iphone'?'#f2f2f7':'#0d0f18';
         document.querySelectorAll('.theme-swatch').forEach(s=>{
             s.classList.toggle('selected',s.dataset.theme===name);
         });
+        this.updateToggle(name);
+    },
+    toggleDayNight(){
+        const current=localStorage.getItem('tjd_theme')||'tradezella';
+        const isLight=current==='iphone';
+        const next=isLight?(localStorage.getItem('tjd_last_dark')||'tradezella'):'iphone';
+        if(!isLight)localStorage.setItem('tjd_last_dark',current);
+        this.apply(next);
+    },
+    updateToggle(name){
+        const cb=document.getElementById('dn-checkbox');
+        if(cb)cb.checked=name==='iphone';
     },
     init(){
-        const saved=localStorage.getItem('tjd_theme')||'tradezella';
+        const saved=localStorage.getItem('tjd_theme')||'iphone';
         this.apply(saved);
     }
 };
@@ -1887,7 +2042,9 @@ const News = {
         }else{
             html+='<div style="font-size:13px;color:var(--text-secondary)">Enable Finnhub API key in Settings to see pre-market data</div>';
         }
-        html+='</div></div></div>';
+        html+='</div></div>';
+        html+=await Edgeful.getCardHTML('ES');
+        html+='</div>';
         return html;
     },
     renderAsiaBrief(){
@@ -1913,7 +2070,7 @@ const News = {
     bindEvents(){
         document.getElementById('toggle-morning')?.addEventListener('click',()=>this.toggleSession('morning'));
         document.getElementById('toggle-asia')?.addEventListener('click',()=>this.toggleSession('asia'));
-        document.getElementById('refresh-news')?.addEventListener('click',()=>this.renderContent());
+        document.getElementById('refresh-news')?.addEventListener('click',()=>{Edgeful._cache={};this.renderContent();});
     },
     init(){
         this.bindEvents();
@@ -1921,7 +2078,131 @@ const News = {
     }
 };
 
+const Edgeful={
+    _cache:{},
+    _dateRange(){
+        const end=new Date();
+        const start=new Date(end);
+        start.setMonth(start.getMonth()-6);
+        const fmt=d=>d.toISOString().split('T')[0];
+        return{start:fmt(start),end:fmt(end)};
+    },
+    async _fetch(path,params=''){
+        const key=Settings.getEdgefulKey();
+        if(!key)return null;
+        const cacheKey=path+params;
+        if(this._cache[cacheKey])return this._cache[cacheKey];
+        try{
+            const res=await fetch(`https://api.edgeful.com${path}${params}`,{headers:{'Authorization':`Bearer ${key}`}});
+            if(!res.ok)return null;
+            const data=await res.json();
+            this._cache[cacheKey]=data;
+            return data;
+        }catch(e){return null;}
+    },
+    async fetchGapFill(ticker='ES'){
+        const{start,end}=this._dateRange();
+        return this._fetch(`/report_calculation/gap-fill-standard/futures/${ticker}`,`?start_date=${start}&end_date=${end}`);
+    },
+    async fetchORB(ticker='ES'){
+        const{start,end}=this._dateRange();
+        return this._fetch(`/intraday_calculation/opening-range-breakout-standard/futures/${ticker}`,`?start_date=${start}&end_date=${end}&start_time=09:30:00&end_time=16:00:00&timezone=America/New_York`);
+    },
+    async fetchIB(ticker='ES'){
+        const{start,end}=this._dateRange();
+        return this._fetch(`/intraday_calculation/initial-balance-breakout-standard/futures/${ticker}`,`?start_date=${start}&end_date=${end}&start_time=09:30:00&end_time=16:00:00&timezone=America/New_York`);
+    },
+    _pct(val){return val!=null&&!isNaN(val)?`${Math.round(val)}%`:'—';},
+    _gapCat(gapFill,category){
+        if(!Array.isArray(gapFill?.summary))return null;
+        const row=gapFill.summary.find(r=>r.category===category);
+        return row?row.percentage:null;
+    },
+    renderCard(gapFill,orb,ib){
+        let html=`<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:16px;margin-top:16px">`;
+        html+=`<div style="font-size:12px;font-weight:600;color:var(--accent-cyan);margin-bottom:12px">📈 EDGE STATS (ES — 6 MO)</div>`;
+        html+=`<div style="display:grid;gap:10px">`;
+        // Gap fill — probability a gap fills, by direction
+        const gapUpFill=this._gapCat(gapFill,'gap up filled');
+        const gapDnFill=this._gapCat(gapFill,'gap down filled');
+        html+=`<div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text-secondary)">Gap Fill ▲&nbsp;/&nbsp;▼</span><strong>${this._pct(gapUpFill)}&nbsp;/&nbsp;${this._pct(gapDnFill)}</strong></div>`;
+        // ORB — probability price breaks the opening range above / below (incl. double breaks)
+        const o=orb?.summary;
+        let orbUp=null,orbDn=null;
+        if(o&&o.totalDays){
+            orbUp=((o.priceBreakAboveCount+o.doubleBreakOccurred)/o.totalDays)*100;
+            orbDn=((o.priceBreakBelowCount+o.doubleBreakOccurred)/o.totalDays)*100;
+        }
+        html+=`<div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text-secondary)">ORB Break ▲&nbsp;/&nbsp;▼</span><strong>${this._pct(orbUp)}&nbsp;/&nbsp;${this._pct(orbDn)}</strong></div>`;
+        // IB — probability the initial balance breaks in at least one direction
+        const ibS=ib?.summary,ibTotal=ib?.totalDays;
+        let ibBrk=null;
+        if(ibS&&ibTotal){ibBrk=((ibS.singleBreak+ibS.bothBroken)/ibTotal)*100;}
+        html+=`<div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text-secondary)">IB Breakout</span><strong style="color:${ibBrk!=null&&ibBrk>=60?'var(--accent-green)':'var(--text-primary)'}">${this._pct(ibBrk)}</strong></div>`;
+        html+=`</div></div>`;
+        return html;
+    },
+    async getCardHTML(ticker='ES'){
+        if(!Settings.getEdgefulKey())return`<div style="font-size:13px;color:var(--text-secondary);margin-top:12px">Add Edgeful API key in Settings for edge stats</div>`;
+        const gapFill=await this.fetchGapFill(ticker);
+        await new Promise(r=>setTimeout(r,300));
+        const orb=await this.fetchORB(ticker);
+        await new Promise(r=>setTimeout(r,300));
+        const ib=await this.fetchIB(ticker);
+        return this.renderCard(gapFill,orb,ib);
+    }
+};
+
+function animateValue(el,end,fmt,duration=600){
+    if(isNaN(end)||!el)return;
+    const abs=Math.abs(end),neg=end<0,start=performance.now();
+    const tick=ts=>{
+        const p=Math.min((ts-start)/duration,1);
+        const ease=1-Math.pow(1-p,3);
+        el.textContent=fmt(neg?-(abs*ease):abs*ease);
+        if(p<1)requestAnimationFrame(tick);
+        else el.textContent=fmt(end);
+    };
+    requestAnimationFrame(tick);
+}
+
+const Sparkline={
+    draw(data,color){
+        if(!data||data.length<2)return '';
+        const w=60,h=22,pad=2;
+        const min=Math.min(...data),max=Math.max(...data),range=max-min||1;
+        const pts=data.map((v,i)=>`${pad+(i/(data.length-1))*(w-pad*2)},${(h-pad)-(((v-min)/range)*(h-pad*2)+pad)}`).join(' ');
+        return `<svg width="${w}" height="${h}" style="position:absolute;bottom:8px;right:10px;opacity:.35"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    }
+};
+
+const Confetti={
+    burst(el){
+        const rect=el?el.getBoundingClientRect():{left:window.innerWidth/2,top:window.innerHeight/2,width:0,height:0};
+        const cx=rect.left+rect.width/2,cy=rect.top+rect.height/2;
+        const colors=['#8b5cf6','#10b981','#f59e0b','#00d4ff','#f43f5e','#00ff88'];
+        for(let i=0;i<32;i++){
+            const p=document.createElement('div');
+            const angle=(i/32)*360+Math.random()*20,dist=70+Math.random()*90;
+            Object.assign(p.style,{position:'fixed',left:cx+'px',top:cy+'px',width:'7px',height:'7px',
+                borderRadius:Math.random()>.5?'50%':'2px',background:colors[i%colors.length],
+                pointerEvents:'none',zIndex:'9999',transform:'translate(-50%,-50%)',
+                transition:`all ${0.5+Math.random()*.5}s cubic-bezier(.17,.67,.42,1.3)`,opacity:'1'});
+            document.body.appendChild(p);
+            requestAnimationFrame(()=>{
+                const rad=angle*Math.PI/180;
+                p.style.transform=`translate(${Math.cos(rad)*dist-3}px,${Math.sin(rad)*dist-3}px) rotate(${Math.random()*360}deg)`;
+                p.style.opacity='0';
+            });
+            setTimeout(()=>p.remove(),1100);
+        }
+    }
+};
+
+
+
 App.init();
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
 </body>
 </html>
