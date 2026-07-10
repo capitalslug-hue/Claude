@@ -1,0 +1,105 @@
+//@version=6
+// Markov 2.0 — Hedge Fund Method (corrected) — TradingView port
+//
+// States from the trailing N-bar cumulative return (default 20 bars:
+// >= +5% BULL, <= -5% BEAR, else SIDEWAYS), a Markov transition matrix,
+// and the signal  P(bull next) - P(bear next).
+//
+// The three v1 fixes, honored here:
+//   FIX 1 — the matrix is STRIDE-SAMPLED (transitions counted every N bars,
+//           non-overlapping). The overlapping "legacy" stickiness is shown in
+//           the table for contrast only — it is autocorrelation, not signal.
+//   FIX 2 — one single stateName() mapping feeds the labels, the colors, the
+//           table and the alerts, so a bull/bear display swap cannot happen;
+//           the table shows the raw N-bar return beside the label so the
+//           mapping is auditable at a glance.
+//   FIX 3 — FILTER mode is explicit: the pane says LONGS ALLOWED / LONGS OFF
+//           against your gate threshold. Your strategy stays yours.
+//
+// The matrix uses an expanding window of history up to the current bar —
+// walk-forward by construction, no lookahead.
+
+indicator("Markov 2.0 — Hedge Fund Method", shorttitle = "MARKOV 2.0", overlay = false)
+
+// ─── Inputs ──────────────────────────────────────────────────────────────
+win      = input.int(20, "State window (bars)", minval = 5)
+bullThr  = input.float(5.0,  "BULL threshold (%)",  step = 0.5) / 100.0
+bearThr  = input.float(-5.0, "BEAR threshold (%)",  step = 0.5) / 100.0
+gate     = input.float(0.0,  "FILTER gate — longs allowed when signal >", step = 0.01)
+tintBg   = input.bool(true,  "Tint the price chart by regime")
+showTbl  = input.bool(true,  "Show matrix table")
+
+// ─── States (single source of truth — FIX 2) ─────────────────────────────
+r = close / close[win] - 1.0
+int state = na
+if not na(r)
+    state := r >= bullThr ? 2 : r <= bearThr ? 0 : 1
+
+stateName(int s) => s == 2 ? "BULL" : s == 0 ? "BEAR" : "SIDEWAYS"
+stateColor(int s) => s == 2 ? color.new(#089981, 0) : s == 0 ? color.new(#f23645, 0) : color.new(#787b86, 0)
+
+// ─── Transition counts: stride-sampled (honest) + legacy (contrast) — FIX 1
+var float[] cnt  = array.new_float(9, 0.0)   // stride = win, non-overlapping
+var float[] cntL = array.new_float(9, 0.0)   // every bar, overlapping (flawed)
+var int prevStride = -1
+var int prevDaily  = -1
+var int nStride    = 0
+var int k          = 0
+if not na(state)
+    if prevDaily >= 0
+        array.set(cntL, prevDaily * 3 + state, array.get(cntL, prevDaily * 3 + state) + 1)
+    prevDaily := state
+    k += 1
+    if k % win == 0
+        if prevStride >= 0
+            array.set(cnt, prevStride * 3 + state, array.get(cnt, prevStride * 3 + state) + 1)
+            nStride += 1
+        prevStride := state
+
+prob(float[] a, int s, int j) =>
+    rowSum = array.get(a, s * 3) + array.get(a, s * 3 + 1) + array.get(a, s * 3 + 2)
+    rowSum > 0 ? array.get(a, s * 3 + j) / rowSum : 1.0 / 3.0
+
+// ─── Signal: P(bull next) − P(bear next), from the honest matrix ──────────
+float sig = na
+if not na(state)
+    sig := prob(cnt, state, 2) - prob(cnt, state, 0)
+longsOK = not na(sig) and sig > gate and nStride >= 30   // warm-up guard
+
+// ─── Pane: signal columns + gate line ─────────────────────────────────────
+sigCol = na(sig) ? color.gray : sig > gate ? color.new(#089981, 20) : sig < -gate ? color.new(#f23645, 20) : color.new(#787b86, 40)
+plot(sig, "Signal P(bull)−P(bear)", style = plot.style_columns, color = sigCol)
+hline(0, "Zero", color = color.new(#787b86, 50))
+plot(gate, "Gate", color = color.new(#2a78d6, 30), linewidth = 1)
+
+// Regime tint on the price chart itself
+bgcolor(tintBg and not na(state) ? color.new(stateColor(state), 92) : na, force_overlay = true)
+
+// ─── Matrix table (stride probabilities; legacy shown only as contrast) ───
+if showTbl and barstate.islast
+    var table t = table.new(position.top_right, 4, 8, bgcolor = color.new(color.black, 25), border_width = 1, border_color = color.new(color.gray, 70))
+    hdr = array.from("", "→BULL", "→SIDE", "→BEAR")
+    for c = 0 to 3
+        table.cell(t, c, 0, array.get(hdr, c), text_color = color.white, text_size = size.small)
+    rows = array.from(2, 1, 0)   // display order BULL, SIDEWAYS, BEAR
+    for i = 0 to 2
+        s = array.get(rows, i)
+        table.cell(t, 0, i + 1, stateName(s), text_color = stateColor(s), text_size = size.small)
+        table.cell(t, 1, i + 1, str.tostring(prob(cnt, s, 2), "0.00"), text_color = color.white, text_size = size.small)
+        table.cell(t, 2, i + 1, str.tostring(prob(cnt, s, 1), "0.00"), text_color = color.white, text_size = size.small)
+        table.cell(t, 3, i + 1, str.tostring(prob(cnt, s, 0), "0.00"), text_color = color.white, text_size = size.small)
+    stick = "stickiness legacy→true  B " + str.tostring(prob(cntL, 2, 2), "0.00") + "→" + str.tostring(prob(cnt, 2, 2), "0.00") + "  S " + str.tostring(prob(cntL, 1, 1), "0.00") + "→" + str.tostring(prob(cnt, 1, 1), "0.00") + "  Br " + str.tostring(prob(cntL, 0, 0), "0.00") + "→" + str.tostring(prob(cnt, 0, 0), "0.00")
+    table.cell(t, 0, 4, stick, text_color = color.new(color.orange, 10), text_size = size.tiny)
+    table.merge_cells(t, 0, 4, 3, 4)
+    table.cell(t, 0, 5, "state: " + stateName(state) + "  (" + str.tostring(win) + "-bar ret " + str.tostring(r * 100, "0.0") + "%)", text_color = stateColor(state), text_size = size.small)
+    table.merge_cells(t, 0, 5, 3, 5)
+    table.cell(t, 0, 6, "signal " + str.tostring(sig, "+0.000") + "   n=" + str.tostring(nStride) + " stride samples", text_color = color.white, text_size = size.small)
+    table.merge_cells(t, 0, 6, 3, 6)
+    verdict = nStride < 30 ? "WARM-UP — need ≥30 samples, load more history" : longsOK ? "FILTER: LONGS ALLOWED" : "FILTER: LONGS OFF"
+    table.cell(t, 0, 7, verdict, text_color = nStride < 30 ? color.orange : longsOK ? #089981 : #f23645, text_size = size.small)
+    table.merge_cells(t, 0, 7, 3, 7)
+
+// ─── Alerts ───────────────────────────────────────────────────────────────
+alertcondition(not na(state) and not na(state[1]) and state != state[1], "Regime changed", "Markov 2.0: regime changed on {{ticker}}")
+alertcondition(ta.crossover(sig, gate),  "Longs allowed (signal > gate)", "Markov 2.0: longs ALLOWED on {{ticker}}")
+alertcondition(ta.crossunder(sig, gate), "Longs off (signal < gate)",     "Markov 2.0: longs OFF on {{ticker}}")
