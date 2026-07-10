@@ -304,9 +304,18 @@ def plot_equity(out: pd.DataFrame, ticker: str, mode: str, path: str):
                COL_LEGACY, 2.0, "solid"),
               ("fixed_equity", "Markov 2.0 (stride-sampled — honest)",
                COL_FIXED, 2.0, "solid")]
-    for col, label, color, lw, ls in series:
+    ymax = max(out[c].max() for c, *_ in series)
+    ymin = min(out[c].min() for c, *_ in series)
+    min_gap = (ymax - ymin) * 0.035  # dodge end labels that would collide
+    ends = sorted((out[c].iloc[-1], i) for i, (c, *_) in enumerate(series))
+    ypos = [0.0] * len(series)
+    prev = None
+    for v, i in ends:
+        y = v if prev is None else max(v, prev + min_gap)
+        ypos[i], prev = y, y
+    for (col, label, color, lw, ls), y in zip(series, ypos):
         ax.plot(out.index, out[col], color=color, lw=lw, ls=ls, label=label)
-        ax.annotate(f" {out[col].iloc[-1]:.2f}x", (out.index[-1], out[col].iloc[-1]),
+        ax.annotate(f" {out[col].iloc[-1]:.2f}x", (out.index[-1], y),
                     color=color, fontsize=9, fontweight="bold", va="center")
     ax.set_title(f"{ticker} — walk-forward equity, {mode.upper()} mode "
                  f"(growth of $1)", color=INK, fontsize=12, loc="left", pad=14)
