@@ -69,8 +69,8 @@ def fetch_history(ticker: str, years: float) -> pd.DataFrame:
     q = res["indicators"]["quote"][0]
     adj = res["indicators"].get("adjclose", [{}])[0].get("adjclose", q["close"])
     df = pd.DataFrame({
-        "close": adj, "raw_close": q["close"], "high": q["high"],
-        "low": q["low"], "volume": q["volume"],
+        "close": adj, "raw_close": q["close"], "open": q["open"],
+        "high": q["high"], "low": q["low"], "volume": q["volume"],
     }, index=pd.to_datetime(res["timestamp"], unit="s", utc=True).tz_convert(
         "America/New_York").normalize().tz_localize(None))
     df = df.dropna(subset=["close"])
@@ -217,13 +217,27 @@ def verify_labels(df: pd.DataFrame, states: pd.Series, window: int,
 
 def walk_forward(df: pd.DataFrame, states: pd.Series, window: int,
                  mode: str, threshold: float, cap: float,
-                 warmup: int = 756, refit_every: int | None = None):
+                 warmup: int = 756, refit_every: int | None = None,
+                 day_session: bool = False, conviction: float = 0.0,
+                 cost_bps: float = 0.0):
     """Expanding-window walk-forward. The matrix at day t is built ONLY from
     data up to t; the position it implies is applied to day t+1's return.
-    Refit every `refit_every` bars (default: the window length)."""
+    Refit every `refit_every` bars (default: the window length).
+
+    day_session=True trades day t+1 open→close only (flat overnight) — the
+    1-trade-a-day pattern; the buy&hold baseline becomes always-long-day-
+    session so the comparison stays apples to apples. conviction gates trades
+    to |signal| ≥ conviction; in STANDALONE mode a conviction gate trades the
+    full ±cap in the signal's direction (binary) instead of sizing by signal.
+    cost_bps charges per unit of turnover (entry+exit each day traded in
+    day-session mode); the baseline stays gross."""
     refit_every = refit_every or window
     px = df["close"].reindex(states.index)
-    ret = px.pct_change().to_numpy()
+    if day_session:
+        ret = np.nan_to_num(
+            (df["raw_close"] / df["open"] - 1.0).reindex(states.index).to_numpy())
+    else:
+        ret = px.pct_change().to_numpy()
     st = states.to_numpy()
     n = len(st)
     if n <= warmup + window:
@@ -240,17 +254,28 @@ def walk_forward(df: pd.DataFrame, states: pd.Series, window: int,
             s = signal_from(P, st[t])
             sig[key][t] = s
             if mode == "filter":
-                pos[key][t + 1] = 1.0 if s > threshold else 0.0
+                p = 1.0 if s > threshold else 0.0
             else:  # standalone: size ∝ signal, capped
-                pos[key][t + 1] = float(np.clip(cap * s, -cap, cap))
+                p = float(np.clip(cap * s, -cap, cap))
+            if conviction > 0:
+                p = 0.0 if abs(s) < conviction else \
+                    (math.copysign(cap, s) if mode == "standalone" else p)
+            pos[key][t + 1] = p
 
     idx = states.index[warmup:]
     out = pd.DataFrame(index=idx)
     out["asset_ret"] = ret[warmup:]
     out["bh_equity"] = (1 + out["asset_ret"].fillna(0)).cumprod()
     for key in ("legacy", "fixed"):
-        r = pos[key][warmup:] * ret[warmup:]
-        out[f"{key}_pos"] = pos[key][warmup:]
+        p = pos[key][warmup:]
+        r = p * ret[warmup:]
+        if cost_bps > 0:
+            if day_session:
+                turnover = 2.0 * np.abs(p)          # in and out every traded day
+            else:
+                turnover = np.abs(np.diff(pos[key], prepend=0.0))[warmup:]
+            r = r - cost_bps / 1e4 * turnover
+        out[f"{key}_pos"] = p
         out[f"{key}_ret"] = r
         out[f"{key}_equity"] = (1 + pd.Series(r, index=idx).fillna(0)).cumprod()
     return out, sig
@@ -376,6 +401,15 @@ def main():
                     help="FILTER mode: signal must exceed this to allow longs")
     ap.add_argument("--cap", type=float, default=1.0,
                     help="STANDALONE mode: max |position| (1.0 = 100%%)")
+    ap.add_argument("--day-session", action="store_true",
+                    help="trade next day open→close only (flat overnight; "
+                         "1 trade per day)")
+    ap.add_argument("--conviction", type=float, default=0.0,
+                    help="trade only when |signal| ≥ this (STANDALONE then "
+                         "trades full ±cap in the signal direction)")
+    ap.add_argument("--cost", type=float, default=0.0,
+                    help="per-turnover cost in basis points (entry+exit "
+                         "charged each traded day in day-session mode)")
     ap.add_argument("--enhanced", action="store_true",
                     help="states from return + ATR + relative volume clusters")
     ap.add_argument("--hmm", action="store_true")
@@ -443,12 +477,23 @@ def main():
     if a.hmm:
         print(hmm_crosscheck(df, states) + "\n")
 
-    print(f"walk-forward backtest ({a.mode.upper()} mode; matrix refit every "
+    flavor = a.mode.upper() + (" DAY-SESSION" if a.day_session else "")
+    extras = []
+    if a.day_session:
+        extras.append("next-day open→close only, flat overnight (1 trade/day)")
+    if a.conviction > 0:
+        extras.append(f"trades only when |signal| ≥ {a.conviction:.2f}")
+    if a.cost > 0:
+        extras.append(f"costs {a.cost:g} bps per turnover (baseline stays gross)")
+    print(f"walk-forward backtest ({flavor} mode; matrix refit every "
           f"{a.window} bars on an expanding window — never tested on data it "
-          "has learned from):")
-    out, _ = walk_forward(df, states, a.window, a.mode, a.threshold, a.cap)
+          "has learned from" + ("; " + "; ".join(extras) if extras else "") + "):")
+    out, _ = walk_forward(df, states, a.window, a.mode, a.threshold, a.cap,
+                          day_session=a.day_session, conviction=a.conviction,
+                          cost_bps=a.cost)
+    baseline = "Long day session" if a.day_session else "Buy & hold"
     rows = {
-        "Buy & hold": metrics(out["asset_ret"], pd.Series(1.0, index=out.index)),
+        baseline: metrics(out["asset_ret"], pd.Series(1.0, index=out.index)),
         "Markov 1.0 (overlapping)": metrics(out["legacy_ret"], out["legacy_pos"]),
         "Markov 2.0 (stride)": metrics(out["fixed_ret"], out["fixed_pos"]),
     }
@@ -457,7 +502,7 @@ def main():
     print(fmt_metrics(rows))
 
     png = os.path.join(a.outdir, f"{a.ticker.lower()}_markov2_equity.png")
-    plot_equity(out, a.ticker.upper(), a.mode, png)
+    plot_equity(out, a.ticker.upper(), flavor, png)
     print(f"\nequity curve: {png}")
     print('\n"Backtests flatter. The fixed matrix shows uglier, truer numbers — '
           'those are the only ones worth trading."')

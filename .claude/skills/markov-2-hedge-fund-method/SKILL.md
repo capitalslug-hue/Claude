@@ -65,6 +65,27 @@ equity-curve PNG. Offer to re-run on any ticker the user names.
   hand-made labels and reports agreement with the threshold labels —
   agreement is the green light.
 
+## Day-trading blueprints (1–2 trades/day)
+
+The daily signal is a bias engine, not an entry engine. Three ways to use it
+intraday, in order of evidence:
+
+1. **Conviction day-hold (backtestable here):** `--day-session --conviction
+   0.10 --cost <bps>` — enter next day's open in the signal direction, flat at
+   the close, only when |signal| ≥ 0.10. One trade per day, no overnight risk.
+   Always include `--cost` for futures; gross numbers flatter at this
+   frequency.
+2. **Regime-gated opening range breakout:** the signal only sets the allowed
+   direction; the user's ORB (e.g. 30-min range break) triggers the entry.
+   Pure FILTER mode. Not testable on daily bars — say so; test it via the
+   TradingView bridge's replay/Strategy Tester in a local session.
+3. **VWAP pullback with bias, max 2 entries:** same gate, pullback trigger.
+   Also intraday-only — same honesty rule.
+
+Known asset quirk (10y walk-forward): **gold's day session carries no edge**
+(drift is overnight) — day-session gating works on index futures (NQ best,
+ES weaker); for gold, use the regime signal for swing holds instead.
+
 ## TradingView integration
 
 - `assets/markov2.pine` is a TradingView port of the indicator (regime tint,
