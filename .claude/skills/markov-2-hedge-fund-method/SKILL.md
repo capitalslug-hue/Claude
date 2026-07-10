@@ -65,6 +65,16 @@ equity-curve PNG. Offer to re-run on any ticker the user names.
   hand-made labels and reports agreement with the threshold labels —
   agreement is the green light.
 
+## TradingView integration
+
+- `assets/markov2.pine` is a TradingView port of the indicator (regime tint,
+  signal pane, matrix table, alerts) — the user pastes it into Pine Editor.
+- **Local sessions only:** the repo's `.mcp.json` defines a `tradingview` MCP
+  bridge to TradingView Desktop via CDP on localhost:9222 — see
+  `assets/TRADINGVIEW-SETUP.md`. Verify with `tv_health_check`. Remote/cloud
+  sessions can never reach the user's localhost; there, use the Yahoo-data
+  engine and say so plainly instead of implying live TradingView access.
+
 ## Reporting
 
 Report honestly: win rate, profit factor, max drawdown, equity curve image,

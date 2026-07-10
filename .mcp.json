@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "tradingview": {
+      "command": "sh",
+      "args": [".claude/skills/markov-2-hedge-fund-method/scripts/tv-bridge.sh"],
+      "env": {
+        "CDP_PORT": "9222"
+      }
+    }
+  }
+}
