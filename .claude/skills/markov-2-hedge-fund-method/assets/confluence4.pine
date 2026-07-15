@@ -1,0 +1,229 @@
+//@version=6
+// 4-Layer Confluence Strategy — Hurst + OTE + Bollinger + StdDev extension
+// Built for 5-minute NQ/MNQ and MGC/GC.
+//
+// Layers (ALL four must align — no partial-confluence entries):
+//   1) Hurst exponent (rolling R/S): >0.55 trending, <0.45 mean-reverting,
+//      between = neutral, no trades.
+//   2) OTE: MSS with displacement defines an impulse leg; entry only on a tap
+//      of its 61.8–78.6% retracement zone.
+//   3) Bollinger context: trending → tap must hold the reference line
+//      (basis by default, switchable to the literal outer band); mean-rev →
+//      tap must reach at/beyond the outer band.
+//   4) StdDev extension: trending → the impulse leg must be extended
+//      (≥ threshold × random-walk stdev); mean-rev → the recent move against
+//      the trade must be extended.
+// Exits: opposite outer band touch, OR extension ratio reverting below 1.0
+// (move losing steam), whichever first. Grace period avoids instant exits.
+//
+// Script pane shows Hurst + extension ratio; price-pane layers are drawn
+// with force_overlay. Status table lists regime + each gate live.
+
+strategy("4-Layer Confluence (Hurst+OTE+BB+SD)", shorttitle = "CONFLUENCE-4",
+     overlay = false, initial_capital = 25000,
+     default_qty_type = strategy.fixed, default_qty_value = 1,
+     commission_type = strategy.commission.cash_per_contract, commission_value = 1.25,
+     calc_on_every_tick = false, process_orders_on_close = true)
+
+// ─── Inputs ───────────────────────────────────────────────────────────────
+grpH  = "Layer 1 — Hurst"
+hLen   = input.int(25,   "Hurst lookback (bars)", minval = 10, maxval = 200, group = grpH)
+hHi    = input.float(0.55, "Trending above",  step = 0.01, group = grpH)
+hLo    = input.float(0.45, "Mean-rev below",  step = 0.01, group = grpH)
+
+grpO  = "Layer 2 — OTE / structure"
+pivLen  = input.int(7,    "Pivot lookback (bars each side)", minval = 3, maxval = 15, group = grpO)
+fibA    = input.float(0.618, "OTE zone from (retrace)", step = 0.001, group = grpO)
+fibB    = input.float(0.786, "OTE zone to (retrace)",   step = 0.001, group = grpO)
+dispMul = input.float(1.5, "Displacement body ≥ × avg body", step = 0.1, group = grpO)
+maxLive = input.int(60,   "Setup expires after (bars)", minval = 10, group = grpO)
+
+grpB  = "Layer 3 — Bollinger"
+bbLen  = input.int(20,   "BB length", group = grpB)
+bbMul  = input.float(2.0, "BB stdev multiplier", step = 0.1, group = grpB)
+bbTrendRef = input.string("Basis", "Trending hold reference", options = ["Basis", "Outer band"], group = grpB)
+
+grpS  = "Layer 4 — StdDev extension"
+sdLen   = input.int(20,   "StdDev window (bars)", group = grpS)
+extThr  = input.float(1.5, "Extended if ≥ × random-walk stdev", minval = 1.0, maxval = 4.0, step = 0.1, group = grpS)
+
+grpX  = "Exits"
+exitGrace = input.int(5, "Bars before steam-loss exit allowed", minval = 0, group = grpX)
+
+// ─── Layer 1: Hurst via single-window R/S on log returns ─────────────────
+hurst(int n) =>
+    r = math.log(close / close[1])
+    m = ta.sma(r, n)
+    float cum = 0.0
+    float mx  = -1e10
+    float mn  =  1e10
+    for i = 0 to n - 1
+        cum += nz(r[i]) - m
+        mx  := math.max(mx, cum)
+        mn  := math.min(mn, cum)
+    rs = mx - mn
+    s  = ta.stdev(r, n)
+    s > 0 and rs > 0 ? math.log(rs / s) / math.log(n) : 0.5
+
+H       = hurst(hLen)
+hTrend  = H > hHi
+hMeanRv = H < hLo
+
+// ─── Layer 4 pieces (needed by layer-2 gating) ────────────────────────────
+sd1     = ta.stdev(ta.change(close), sdLen)               // 1-bar stdev
+recMove = close - close[sdLen]
+recExt  = sd1 > 0 ? math.abs(recMove) / (sd1 * math.sqrt(sdLen)) : 0.0
+
+// ─── Layer 2: pivots, MSS + displacement, impulse leg, OTE zone ───────────
+ph = ta.pivothigh(high, pivLen, pivLen)
+pl = ta.pivotlow(low, pivLen, pivLen)
+var float lastSH = na
+var float lastSL = na
+if not na(ph)
+    lastSH := ph
+if not na(pl)
+    lastSL := pl
+
+body    = math.abs(close - open)
+avgBody = ta.sma(body, 20)
+disp    = avgBody > 0 and body >= dispMul * avgBody
+
+bullMSS = not na(lastSH) and close > lastSH and disp
+bearMSS = not na(lastSL) and close < lastSL and disp
+
+var int   dir    = 0        // 1 = bull leg live, -1 = bear leg live
+var float legHi  = na
+var float legLo  = na
+var int   mssBar = na
+
+if bullMSS and dir != 1 and not na(lastSL)
+    dir    := 1
+    legLo  := lastSL
+    legHi  := high
+    mssBar := bar_index
+if bearMSS and dir != -1 and not na(lastSH)
+    dir    := -1
+    legHi  := lastSH
+    legLo  := low
+    mssBar := bar_index
+
+if dir == 1
+    legHi := math.max(legHi, high)
+    if close < legLo or bar_index - mssBar > maxLive
+        dir := 0
+if dir == -1
+    legLo := math.min(legLo, low)
+    if close > legHi or bar_index - mssBar > maxLive
+        dir := 0
+
+rng      = legHi - legLo
+zTopL    = dir == 1  ? legHi - fibA * rng : na   // long zone (bull leg retrace)
+zBotL    = dir == 1  ? legHi - fibB * rng : na
+zBotS    = dir == -1 ? legLo + fibA * rng : na   // short zone (bear leg retrace)
+zTopS    = dir == -1 ? legLo + fibB * rng : na
+tapLong  = dir == 1  and bar_index > mssBar and low  <= zTopL and high >= zBotL
+tapShort = dir == -1 and bar_index > mssBar and high >= zBotS and low  <= zTopS
+
+// leg extension in random-walk units (Layer 4, trend flavor)
+legBars  = math.max(bar_index - mssBar, 1)
+legExt   = sd1 > 0 ? rng / (sd1 * math.sqrt(legBars)) : 0.0
+legExtOK = legExt >= extThr
+
+// ─── Layer 3: Bollinger context ───────────────────────────────────────────
+bbBasis = ta.sma(close, bbLen)
+bbDev   = bbMul * ta.stdev(close, bbLen)
+bbUp    = bbBasis + bbDev
+bbDn    = bbBasis - bbDev
+refL    = bbTrendRef == "Basis" ? bbBasis : bbUp
+refS    = bbTrendRef == "Basis" ? bbBasis : bbDn
+bbTrendL = close >= refL            // trending long: tap holds the reference
+bbTrendS = close <= refS
+bbMrL    = low  <= bbDn             // mean-rev long: tap reaches outer band
+bbMrS    = high >= bbUp
+
+// ─── Layer 4: alignment per flavor ────────────────────────────────────────
+extTrendL = legExtOK                                  // extended bull impulse
+extTrendS = legExtOK
+extMrL    = recExt >= extThr and recMove < 0          // extended move DOWN into long
+extMrS    = recExt >= extThr and recMove > 0
+
+// ─── Entry logic: all four gates ──────────────────────────────────────────
+longTrend  = hTrend  and tapLong  and bbTrendL and extTrendL
+longMR     = hMeanRv and tapLong  and bbMrL    and extMrL
+shortTrend = hTrend  and tapShort and bbTrendS and extTrendS
+shortMR    = hMeanRv and tapShort and bbMrS    and extMrS
+
+goLong  = (longTrend or longMR)   and strategy.position_size == 0
+goShort = (shortTrend or shortMR) and strategy.position_size == 0
+
+var int entryBar = na
+if goLong
+    strategy.entry("L", strategy.long,
+         alert_message = '{"sym":"{{ticker}}","side":"long","price":"{{close}}","mode":"' + (longTrend ? "trend" : "meanrev") + '"}')
+    entryBar := bar_index
+    dir := 0                        // consume the setup
+if goShort
+    strategy.entry("S", strategy.short,
+         alert_message = '{"sym":"{{ticker}}","side":"short","price":"{{close}}","mode":"' + (shortTrend ? "trend" : "meanrev") + '"}')
+    entryBar := bar_index
+    dir := 0
+
+// ─── Exit logic: opposite band OR extension dies, whichever first ─────────
+steamOut = recExt < 1.0 and not na(entryBar) and bar_index - entryBar >= exitGrace
+if strategy.position_size > 0 and (high >= bbUp or steamOut)
+    strategy.close("L", comment = high >= bbUp ? "band" : "steam",
+         alert_message = '{"sym":"{{ticker}}","side":"flat","price":"{{close}}"}')
+if strategy.position_size < 0 and (low <= bbDn or steamOut)
+    strategy.close("S", comment = low <= bbDn ? "band" : "steam",
+         alert_message = '{"sym":"{{ticker}}","side":"flat","price":"{{close}}"}')
+
+// ─── Pane plots: Hurst + extension ratio ──────────────────────────────────
+plot(H, "Hurst", color = hTrend ? color.new(#089981, 0) : hMeanRv ? color.new(#f23645, 0) : color.new(#787b86, 0), linewidth = 2)
+hline(0.55, "Trending", color = color.new(#089981, 50))
+hline(0.5,  "Random",   color = color.new(#787b86, 60))
+hline(0.45, "Mean-rev", color = color.new(#f23645, 50))
+plot(recExt / 4, "Ext ratio (÷4 scale)", color = color.new(#2a78d6, 40), style = plot.style_columns)
+
+// ─── Price-pane drawings (force_overlay) ──────────────────────────────────
+plot(bbBasis, "BB basis", color = color.new(#787b86, 30), force_overlay = true)
+plot(bbUp,    "BB upper", color = color.new(#2a78d6, 40), force_overlay = true)
+plot(bbDn,    "BB lower", color = color.new(#2a78d6, 40), force_overlay = true)
+plotshape(bullMSS, "Bull MSS", shape.triangleup,   location.belowbar, color.new(#089981, 0), size = size.tiny, force_overlay = true)
+plotshape(bearMSS, "Bear MSS", shape.triangledown, location.abovebar, color.new(#f23645, 0), size = size.tiny, force_overlay = true)
+
+var box zoneBox = na
+if dir != 0 and rng > 0
+    zt = dir == 1 ? zTopL : zTopS
+    zb = dir == 1 ? zBotL : zBotS
+    if na(zoneBox)
+        zoneBox := box.new(mssBar, zt, bar_index, zb, border_color = color.new(color.orange, 40), bgcolor = color.new(color.orange, 85), force_overlay = true)
+    else
+        box.set_lefttop(zoneBox, mssBar, zt)
+        box.set_rightbottom(zoneBox, bar_index, zb)
+else if not na(zoneBox)
+    box.delete(zoneBox)
+    zoneBox := na
+
+// ─── Status table ─────────────────────────────────────────────────────────
+if barstate.islast
+    var table t = table.new(position.top_right, 2, 6, bgcolor = color.new(color.black, 20), border_width = 1, border_color = color.new(color.gray, 70))
+    regime = hTrend ? "TRENDING" : hMeanRv ? "MEAN-REV" : "NEUTRAL"
+    rc     = hTrend ? #089981 : hMeanRv ? #f23645 : #787b86
+    onoff(bool b) => b ? "✔" : "✘"
+    table.cell(t, 0, 0, "Regime (H=" + str.tostring(H, "0.00") + ")", text_color = color.white, text_size = size.small)
+    table.cell(t, 1, 0, regime, text_color = rc, text_size = size.small)
+    table.cell(t, 0, 1, "1 Hurst gate",  text_color = color.white, text_size = size.small)
+    table.cell(t, 1, 1, onoff(hTrend or hMeanRv), text_color = color.white, text_size = size.small)
+    table.cell(t, 0, 2, "2 OTE tap",     text_color = color.white, text_size = size.small)
+    table.cell(t, 1, 2, onoff(tapLong or tapShort), text_color = color.white, text_size = size.small)
+    table.cell(t, 0, 3, "3 BB context",  text_color = color.white, text_size = size.small)
+    table.cell(t, 1, 3, onoff((hTrend and (bbTrendL or bbTrendS)) or (hMeanRv and (bbMrL or bbMrS))), text_color = color.white, text_size = size.small)
+    table.cell(t, 0, 4, "4 SD extension", text_color = color.white, text_size = size.small)
+    table.cell(t, 1, 4, onoff(hTrend ? legExtOK : (extMrL or extMrS)), text_color = color.white, text_size = size.small)
+    table.cell(t, 0, 5, "Position", text_color = color.white, text_size = size.small)
+    table.cell(t, 1, 5, strategy.position_size > 0 ? "LONG" : strategy.position_size < 0 ? "SHORT" : "FLAT", text_color = color.white, text_size = size.small)
+
+// ─── Webhook-friendly alert conditions ────────────────────────────────────
+alertcondition(goLong,  "C4 long entry",  "CONFLUENCE-4 LONG {{ticker}} @ {{close}}")
+alertcondition(goShort, "C4 short entry", "CONFLUENCE-4 SHORT {{ticker}} @ {{close}}")
+alertcondition(strategy.position_size == 0 and strategy.position_size[1] != 0, "C4 exit", "CONFLUENCE-4 FLAT {{ticker}} @ {{close}}")
